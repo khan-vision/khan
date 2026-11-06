@@ -22,6 +22,9 @@ import (
 //   - WHERE-ийн ДЭЭД түвшний AND нөхцөлүүдийн нэг нь `org_id = ?` / `org_id IN (?)`
 //     (`<alias>.org_id` ч болно). OR дотор байгаа org_id тооцогдохгүй.
 //   - Query tenant.Tx (app.org_id тавьсан RLS транзакц) эсвэл SystemTx дотор.
+//   - Hybrid (shared) хүснэгтийн унших нөхцөл яг `(org_id = ? OR org_id IS NULL)` (SharedCond) —
+//     org утга хоосон биш бол. Өөр OR-той хослол тооцогдохгүй.
+//   - Statement нь SystemRow-оор ил тод тэмдэглэгдсэн (системийн мөр, org_id IS NULL).
 //   - INSERT: мөр бүрт org_id утгатай (Create — struct/map-ийн org_id хоосон биш).
 //
 // Raw/Exec SQL-ийг шалгахгүй (string parse найдваргүй) — тэдгээрийг RLS хамгаална.
@@ -93,7 +96,7 @@ func (g *Guard) check(op string) func(*gorm.DB) {
 			return
 		}
 		table := statementTable(db.Statement)
-		if !g.tables[table] || g.trusted(db) {
+		if !g.tables[table] || g.trusted(db) || isSystemRow(db) {
 			return
 		}
 		if whereHasOrg(db.Statement) {
@@ -108,7 +111,7 @@ func (g *Guard) checkCreate(db *gorm.DB) {
 		return
 	}
 	table := statementTable(db.Statement)
-	if !g.tables[table] || g.trusted(db) {
+	if !g.tables[table] || g.trusted(db) || isSystemRow(db) {
 		return
 	}
 	if createHasOrg(db.Statement) {
@@ -188,9 +191,9 @@ func exprHasOrg(e clause.Expression) bool {
 	case clause.IN:
 		return isOrgColumn(x.Column) && len(x.Values) > 0
 	case clause.Expr:
-		return sqlHasOrg(x.SQL) && !hasEmptyOrgVar(x.Vars)
+		return (sqlHasOrg(x.SQL) || isSharedCond(x.SQL)) && !hasEmptyOrgVar(x.Vars)
 	case clause.NamedExpr:
-		return sqlHasOrg(x.SQL) && !hasEmptyOrgVar(x.Vars)
+		return (sqlHasOrg(x.SQL) || isSharedCond(x.SQL)) && !hasEmptyOrgVar(x.Vars)
 	case clause.AndConditions:
 		for _, sub := range x.Exprs {
 			if exprHasOrg(sub) {

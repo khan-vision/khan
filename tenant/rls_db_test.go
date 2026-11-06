@@ -92,3 +92,52 @@ func TestRLSStrict(t *testing.T) {
 		t.Fatalf("bypass: %d мөр, want 3", n)
 	}
 }
+
+func TestRLSSystemRows(t *testing.T) {
+	tx := testkit.TxDB(t)
+	policy, err := tenant.PolicySQL("khan_rls.doc", tenant.PolicyOptions{Mode: tenant.PolicyStrict, SystemRows: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stmts := []string{
+		`CREATE SCHEMA khan_rls`,
+		`CREATE TABLE khan_rls.doc (id serial PRIMARY KEY, org_id uuid, title text)`,
+		fmt.Sprintf(`INSERT INTO khan_rls.doc (org_id, title) VALUES ('%s','a1'),('%s','b1'),(NULL,'sys')`, orgA, orgB),
+		policy,
+		`CREATE ROLE khan_rls_app NOLOGIN NOSUPERUSER NOBYPASSRLS`,
+		`GRANT USAGE ON SCHEMA khan_rls TO khan_rls_app`,
+		`GRANT SELECT, INSERT, UPDATE, DELETE ON khan_rls.doc TO khan_rls_app`,
+		`GRANT USAGE ON SEQUENCE khan_rls.doc_id_seq TO khan_rls_app`,
+		`SET LOCAL ROLE khan_rls_app`,
+	}
+	for _, s := range stmts {
+		if err := tx.Exec(s).Error; err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+	}
+	if err := tenant.WithOrg(tx, orgA); err != nil {
+		t.Fatal(err)
+	}
+	// унших: өөрийн + системийн (B-ийнх биш)
+	if n := count(t, tx); n != 2 {
+		t.Fatalf("org A: %d мөр, want 2 (a1 + sys)", n)
+	}
+	// системийн мөрийг өөрчлөх/устгах/өөртөө авах боломжгүй (0 мөр нөлөөлнө)
+	if res := tx.Exec(`UPDATE khan_rls.doc SET title = 'hacked' WHERE org_id IS NULL`); res.Error != nil || res.RowsAffected != 0 {
+		t.Fatalf("системийн мөр UPDATE: %v, %d", res.Error, res.RowsAffected)
+	}
+	if res := tx.Exec(`UPDATE khan_rls.doc SET org_id = ? WHERE org_id IS NULL`, orgA); res.Error != nil || res.RowsAffected != 0 {
+		t.Fatalf("системийн мөрийг өөртөө авах: %v, %d", res.Error, res.RowsAffected)
+	}
+	if res := tx.Exec(`DELETE FROM khan_rls.doc WHERE org_id IS NULL`); res.Error != nil || res.RowsAffected != 0 {
+		t.Fatalf("системийн мөр DELETE: %v, %d", res.Error, res.RowsAffected)
+	}
+	if err := tx.Exec(`INSERT INTO khan_rls.doc (org_id, title) VALUES (NULL, 'x')`).Error; err == nil {
+		t.Fatal("tenant системийн мөр INSERT хийж чадлаа")
+	}
+	// DropPolicySQL хоёр policy-г хоёуланг нь устгана
+	drop, _ := tenant.DropPolicySQL("khan_rls.doc")
+	if !strings.Contains(drop, tenant.SystemPolicyName) {
+		t.Fatalf("drop SQL: %s", drop)
+	}
+}
