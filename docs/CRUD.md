@@ -117,6 +117,8 @@ type Resource[T any] struct {
     StrictUnknown bool   // зарлаагүй ТҮЛХҮҮР бүрт 422 (id, org_id, created_at... зэрэг хамгаалагдсан түлхүүр ч). Зарласан талбар, children, Version зөвшөөрөгдөнө
     MaxBody       int    // анхдагч 1 MiB; create/update body-д
     ExposeMeta    bool
+    Cache         *crud.CacheSpec // nil → унтраалттай. GET /, POST /query, GET /:id, GET /options/:field-ийн хариуны cache + ETag/304;
+                                  // бичилт commit болсны дараа bump. Гэрээ: docs/CACHE.md §4
 
     DB  func() *gorm.DB                  // ЗААВАЛ
     Org func(c fiber.Ctx) (string, bool) // nil → tenant.Require
@@ -411,6 +413,7 @@ Cleanup: үүсгэсэн мөрийг API-аар (DELETE) устгана (best 
 | 19 | `Resource.Timeout` (анхдагч 30с, <0 хязгааргүй) — handler бүрийн context deadline | Удаан query DB-г хязгааргүй эзлэхгүй |
 | 20 | `codegen`: `Meta` нь `ExposeMeta`, child id багана (`"id"` гэж үзнэ)-г агуулдаггүй; OpenAPI `/meta` нь `Info.MetaRoutes`-оор нэг дор | Meta-г өөрчлөхгүйгээр (crud-д хөндөхгүй) codegen/crudtest нэмсэн; хэрэгтэй бол `Meta.ExposeMeta`, `ChildMeta.IDColumn` нэмнэ |
 | 21 | Decimal: Row `number`, Payload `number \| string` (zod union + scale/range шалгалт) | Хариу нь яг цифртэй JSON тоо, хүсэлт тоо эсвэл мөр (§6) |
+| 22 | `Resource.Cache` (`CacheSpec`): унших 4 endpoint-ийн org-тусгаарлагдсан generation cache + ETag/304, бичилт commit-ийн дараа bump | GraphQL/apollo client cache-ийг орлоно; `can` cache-д ордоггүй, read эрх cache-ээс өмнө; 4xx/5xx cache-д ордоггүй; `ListQuery` нь хэрэглэгчээс хамаарсан бол Cache тавихгүй. [docs/CACHE.md](CACHE.md) |
 
 **Unique-ийн шаардлага:** `Unique: true` талбар нь апп түвшний шалгалт (TOCTOU) тул DB-д заавал
 `UNIQUE (org_id, col) [WHERE deleted_at IS NULL]` index байх ёстой — org_id-гүй global index бусад байгууллагад тухайн

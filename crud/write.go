@@ -1,6 +1,7 @@
 package crud
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,16 +18,40 @@ import (
 func nowExpr() clause.Expr { return gorm.Expr("now()") }
 
 // tx — write транзакц. RLS үед tenant.Tx (app.org_id тавигдана).
+//
+// fn-ийн алдаа = rollback баталгаатай (COMMIT ажиллаагүй). fn амжилттай боловч транзакц алдаа
+// буцаавал тэр нь COMMIT-ийн (эсвэл холболтын) алдаа — сервер commit хийсэн эсэх ТОДОРХОЙГҮЙ тул
+// *commitError-оор тэмдэглэнэ (дуудагч cache-ийг болгоомжилж bump хийнэ).
 func (e *engine) tx(c fiber.Ctx, orgID string, fn func(tx *gorm.DB) error) error {
 	gdb := e.db()
 	if gdb == nil {
 		return errors.New("khan/crud: DB nil")
 	}
-	if e.rls {
-		return tenant.Tx(c.Context(), gdb, orgID, fn)
+	fnOK := false
+	wrapped := func(tx *gorm.DB) error {
+		if err := fn(tx); err != nil {
+			return err
+		}
+		fnOK = true
+		return nil
 	}
-	return khandb.Tx(c.Context(), gdb, fn)
+	var err error
+	if e.rls {
+		err = tenant.Tx(c.Context(), gdb, orgID, wrapped)
+	} else {
+		err = khandb.Tx(c.Context(), gdb, wrapped)
+	}
+	if err != nil && fnOK {
+		return &commitError{err}
+	}
+	return err
 }
+
+// commitError — fn амжилттай болсны дараах транзакцын (COMMIT) алдаа.
+type commitError struct{ err error }
+
+func (e *commitError) Error() string { return "khan/crud: commit: " + e.err.Error() }
+func (e *commitError) Unwrap() error { return e.err }
 
 func (e *engine) allowed(c fiber.Ctx, a Action) bool { return e.can != nil && e.can(c, a) }
 
@@ -249,8 +274,12 @@ func (e *engine) create(c fiber.Ctx) error {
 		return err
 	})
 	if err != nil {
+		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
+			e.bumpCache(c, orgID)
+		}
 		return e.fail(c, ActionCreate, err)
 	}
+	e.bumpCache(c, orgID) // commit-ийн ДАРАА
 	return c.Status(http.StatusCreated).JSON(out)
 }
 
@@ -365,8 +394,12 @@ func (e *engine) update(c fiber.Ctx) error {
 		return err
 	})
 	if err != nil {
+		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
+			e.bumpCache(c, orgID)
+		}
 		return e.fail(c, ActionUpdate, err)
 	}
+	e.bumpCache(c, orgID) // commit-ийн ДАРАА
 	return c.JSON(out)
 }
 
@@ -389,8 +422,12 @@ func (e *engine) remove(c fiber.Ctx) error {
 		return e.deleteOne(c, tx, orgID, uid, idVal, id)
 	})
 	if err != nil {
+		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
+			e.bumpCache(c, orgID)
+		}
 		return e.fail(c, ActionDelete, err)
 	}
+	e.bumpCache(c, orgID) // commit-ийн ДАРАА
 	return c.JSON(fiber.Map{"deleted": id})
 }
 
@@ -448,15 +485,33 @@ func (e *engine) get(c fiber.Ctx) error {
 	if !e.allowed(c, ActionRead) {
 		return jsonErr(c, fiber.StatusForbidden, msgForbidden)
 	}
-	idVal, _, ok := e.parseID(c.Params("id"))
+	idVal, id, ok := e.parseID(c.Params("id"))
 	if !ok {
 		return jsonErr(c, fiber.StatusBadRequest, msgBadID)
 	}
-	var out map[string]any
-	err := e.read(c.Context(), orgID, func(db *gorm.DB) (err error) {
-		out, err = e.loadDetail(db, orgID, idVal)
-		return err
-	})
+	load := func(ctx context.Context) (map[string]any, error) {
+		var out map[string]any
+		err := e.read(ctx, orgID, func(db *gorm.DB) (err error) {
+			out, err = e.loadDetail(db, orgID, idVal)
+			return err
+		})
+		return out, err
+	}
+	if e.cacheReads() {
+		// 404/5xx алдаа cache-д орохгүй (compute алдаа буцаана).
+		err := e.serveCached(c, orgID, []string{"get", id}, e.canMap(c), func(ctx context.Context) ([]byte, error) {
+			out, err := load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return c.App().Config().JSONEncoder(out)
+		}, nil)
+		if err != nil {
+			return e.fail(c, ActionRead, err)
+		}
+		return nil
+	}
+	out, err := load(c.Context())
 	if err != nil {
 		return e.fail(c, ActionRead, err)
 	}

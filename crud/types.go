@@ -143,6 +143,9 @@ type Resource[T any] struct {
 	Timeout    time.Duration
 	ExposeMeta bool
 
+	// Cache — унших endpoint-уудын cache + ETag/304; nil → унтраалттай. CacheSpec, docs/CACHE.md §4.
+	Cache *CacheSpec
+
 	DB      func() *gorm.DB
 	Org     func(c fiber.Ctx) (string, bool)
 	NewRows func() any

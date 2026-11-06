@@ -153,3 +153,29 @@ func (s Spec) orderFor(sortKey, dir string) string {
 
 // stripNUL — NUL тэмдэгтийг хасна (Postgres text-д зөвшөөрөгдөхгүй, 22021 → 500).
 func stripNUL(s string) string { return strings.ReplaceAll(s, "\x00", "") }
+
+// Normalized — query-ийн ӨӨРИЙН дүрмээр (prepare/orderFor) хэвшүүлсэн хүсэлт: page/limit-ийг
+// хязгаарлаж, search-ийг trim хийж, sort/dir-ийг эцсийн ORDER BY болгоно. Cache түлхүүрт ашиглана:
+// ижил үр дүн өгөх хүсэлтүүд ижил утгатай, өөр үр дүн өгөх хүсэлтүүд ялгаатай байна.
+// Filters-ийг энд хувиргахгүй (дуудагч тогтвортой JSON болгоно).
+func (s Spec) Normalized(req Request) (page, limit int, search, order string) {
+	defLimit := s.DefaultLimit
+	if defLimit <= 0 {
+		defLimit = 25
+	}
+	maxLimit := s.MaxLimit
+	if maxLimit <= 0 {
+		maxLimit = 500
+	}
+	page, limit = req.Page, req.Limit
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = defLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+	return page, limit, strings.TrimSpace(req.Search), s.orderFor(req.Sort, req.Dir)
+}

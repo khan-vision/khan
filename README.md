@@ -42,7 +42,8 @@ gorm postgres driver v1.6.3, golang-jwt v5.
 | `crud` | ✅ | Declarative CRUD: `Resource[T]` → list/query/export/bulk (`query`-ээр) + GET/POST/PUT/DELETE, options, meta, children (subform), hook, events (outbox), optimistic `Version`, soft delete, RLS. Гэрээ: [docs/CRUD.md](docs/CRUD.md) |
 | `codegen` | ✅ | `crud.Meta` → TypeScript (`Payload`/`Row` interface, zod v4 schema, `KvFieldDef[]`, Ref `load`, endpoint) ба OpenAPI 3.1 JSON; deterministic, `WriteFile` (өөрчлөлтгүй бол хөндөхгүй). Апп өөрийн `cmd/kvgen`-ээс дуудна. [docs/CRUD.md §6](docs/CRUD.md) |
 | `crudtest` | ✅ | `Isolation(t, Config)` — tenant leak тест generator (list/GET/PUT/DELETE/bulk/body org_id/ref/options/children/401), JWT эсвэл header claims. [docs/CRUD.md §7](docs/CRUD.md) |
-| `access`, `cache`, `audit` | ⏳ | → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| `cache` | ✅ | Generation-д суурилсан, org-тусгаарлагдсан хариуны cache: `Memory` (sharded LRU+TTL), `Cache.Remember` (singleflight, fail-open), `Bump`/`Version`, `ETag`/304, `BumpOnEvents`; `cache/rediscache` (go-redis v9, олон instance bump-ийг шууд харна); `crud.Resource.Cache`. [docs/CACHE.md](docs/CACHE.md) |
+| `access`, `audit` | ⏳ | → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 ## Хэрэглээ
 
@@ -107,6 +108,20 @@ if err := rooms.Mount(app.Group("/api/organization/conference/rooms", authMW)); 
 
 `org_id` зөвхөн JWT-ээс; body-ийн `org_id`/`id` үл тоогдоно; өөр org-ийн мөр 404; ref нь тухайн org-д олдох ёстой (422);
 алдаа `{"error":"…","errors":{"field":["…"]}}` (KvForm `serverErrors.ts`).
+
+## Cache (ETag / 304)
+
+```go
+c, err := cache.New(cache.Config{})                                   // L1 + in-process gens
+// олон instance: rc := rediscache.New(redisClient); c, err = cache.New(cache.Config{L2: rc})
+invoices.Cache = &crud.CacheSpec{Cache: c, DependsOn: []string{"finance.customer"}} // GET /, /query, /:id, /options/:field
+// crud-ийн гадуурх бичилт: c.Bump(ctx, orgID, "finance.invoice") эсвэл
+disp.Handle("finance.*", cache.BumpOnEvents(c))
+```
+
+Бичилт commit болсны дараа `(org, resource)` generation нэмэгдэж хуучин түлхүүр хэзээ ч уншигдахгүй; хариу нь
+`ETag` + `Cache-Control: private, no-cache`-тэй, `If-None-Match` таарвал DB-гүй `304`. `can` cache-д ордоггүй.
+Redis унавал DB-ээс шууд үйлчилнэ (`X-Khan-Cache: bypass`).
 
 ## Tenant тусгаарлалт (RLS)
 

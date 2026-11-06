@@ -75,8 +75,9 @@ Go↔TS codegen нь `crud.Resource`-ийн тодорхойлолтоос ха�
   Дараах route-уудыг mount хийнэ: `GET /`, `POST /query`, `GET /:id`, `POST /`, `PUT /:id`, `DELETE /:id`,
   `GET /export.xlsx`, `POST /bulk`, `GET /options`. Wire нь front_end `useKvCrud`-тэй ижил.
 - **lookup**, **validate**: `{error, errors:{field:[msg]}}` хэлбэрийн envelope.
-- **cache**: L1 in-process болон L2 Redis. Түлхүүр нь `org:{org}:{resource}:g{gen}:{hash}`. Write бүрд generation
-  нэмэгдэнэ. Redis pub/sub, singleflight ашиглана. `ETag` + `Cache-Control: private, no-cache` толгойтой.
+- **cache**: L1 in-process болон L2 Redis (`cache/rediscache`). Түлхүүр нь `<prefix>:v1:<org>:<resource>:<gens>:<hash>`.
+  Write commit бүрийн дараа generation нэмэгдэнэ (Redis дээр хуваалцагдана), singleflight ашиглана.
+  `ETag` + `Cache-Control: private, no-cache` толгойтой. Гэрээ: [CACHE.md](CACHE.md).
 - **upload**: SVG/content-type шалгалт, nosniff+CSP, thumbnail.
 - **audit**: write audit.
 - **cmd/khan gen**: `gen model`, `gen resource` (Go + FE `KvCrudConfig` draft), `gen from-lambda --form --grid`.

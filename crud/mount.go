@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/khan-vision/khan/obs"
@@ -116,16 +117,34 @@ func (e *engine) listHandler(c fiber.Ctx) error {
 	if err != nil {
 		return e.queryFail(c, ActionRead, err)
 	}
-	rows := e.newRows()
-	var resp fiber.Map
-	// RLS үед count/totals/data бүгд НЭГ tenant.Tx дотор (app.org_id тавигдана).
-	err = e.read(c.Context(), orgID, func(db *gorm.DB) error {
-		var err error
-		if resp, err = query.RunRequest(req, func() *gorm.DB { return e.listQuery(db, orgID) }, rows, e.listSpec); err != nil {
-			return err
+	// load — жагсаалтын хариу (can-гүй). RLS үед count/totals/data бүгд НЭГ tenant.Tx дотор (app.org_id тавигдана).
+	load := func(ctx context.Context) (fiber.Map, error) {
+		rows := e.newRows()
+		var resp fiber.Map
+		err := e.read(ctx, orgID, func(db *gorm.DB) error {
+			var err error
+			if resp, err = query.RunRequest(req, func() *gorm.DB { return e.listQuery(db, orgID) }, rows, e.listSpec); err != nil {
+				return err
+			}
+			return e.overlayListDecimals(db, orgID, rows)
+		})
+		return resp, err
+	}
+	if parts, cacheable := e.listParts(req); e.cacheReads() && cacheable {
+		can := e.canMap(c)
+		err := e.serveCached(c, orgID, parts, can, func(ctx context.Context) ([]byte, error) {
+			resp, err := load(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return c.App().Config().JSONEncoder(resp)
+		}, e.withCan(c, can))
+		if err != nil {
+			return e.queryFail(c, ActionRead, err)
 		}
-		return e.overlayListDecimals(db, orgID, rows)
-	})
+		return nil
+	}
+	resp, err := load(c.Context())
 	if err != nil {
 		return e.queryFail(c, ActionRead, err)
 	}
@@ -204,8 +223,12 @@ func (e *engine) bulkHandler(c fiber.Ctx) error {
 		return e.afterBulk(c, tx, orgID, req, ids)
 	})
 	if err != nil {
+		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
+			e.bumpCache(c, orgID)
+		}
 		return e.queryFail(c, a, err)
 	}
+	e.bumpCache(c, orgID) // commit-ийн ДАРАА
 	return c.JSON(fiber.Map{"affected": n})
 }
 
@@ -235,15 +258,38 @@ func (e *engine) optionsHandler() fiber.Handler {
 		if !found {
 			return jsonErr(c, fiber.StatusNotFound, "Олдсонгүй")
 		}
-		if !e.rls {
-			return handlers[c.Params("field")](c)
+		// run — lookup handler хариугаа c-д өөрөө бичнэ.
+		run := func() error {
+			if !e.rls {
+				return handlers[c.Params("field")](c)
+			}
+			err := tenant.Tx(c.Context(), gdb, orgID, func(tx *gorm.DB) error {
+				return f.ref.Handler(func() *gorm.DB { return tx }, e.org)(c)
+			})
+			if err != nil {
+				return e.fail(c, ActionRead, err)
+			}
+			return nil
 		}
-		err := tenant.Tx(c.Context(), gdb, orgID, func(tx *gorm.DB) error {
-			return f.ref.Handler(func() *gorm.DB { return tx }, e.org)(c)
-		})
-		if err != nil {
-			return e.fail(c, ActionRead, err)
+		if !e.cacheReads() || utf8.RuneCountInString(c.Query("search")) > maxCachedSearch {
+			return run()
 		}
-		return nil
+		// Cache: хариуг c-ээс барьж авна. 200 биш хариу (400 параметр, 500) cache-д орохгүй — дамжуулна.
+		parts := []string{"options", f.key, c.Query("search"), c.Query("parent"), c.Query("ids"), c.Query("limit")}
+		err := e.serveCached(c, orgID, parts, e.canMap(c), func(context.Context) ([]byte, error) {
+			if err := run(); err != nil {
+				return nil, err
+			}
+			resp := c.Response()
+			if resp.StatusCode() != fiber.StatusOK {
+				return nil, &relayErr{status: resp.StatusCode(), ctype: string(resp.Header.ContentType()), body: bytes.Clone(resp.Body())}
+			}
+			return bytes.Clone(resp.Body()), nil
+		}, nil)
+		var rel *relayErr
+		if errors.As(err, &rel) {
+			return writeRelay(c, rel)
+		}
+		return err
 	}
 }

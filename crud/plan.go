@@ -96,6 +96,8 @@ type engine struct {
 	db  func() *gorm.DB
 	org func(c fiber.Ctx) (string, bool)
 
+	cache *cachePlan // nil = cache унтраалттай
+
 	decimals []*fieldPlan    // Money/Number талбарууд (хариунд яг decimal-аар)
 	pwCols   map[string]bool // Password төрлийн баганууд (хариу/event-ээс хасна)
 	known    map[string]bool // StrictUnknown-д зөвшөөрөгдөх body түлхүүрүүд
@@ -235,6 +237,9 @@ func (r *Resource[T]) build(runtime bool) (*engine, error) {
 		e.children = append(e.children, cp)
 	}
 
+	if e.cache, err = compileCache(r.Name, r.Cache); err != nil {
+		return fail("%v", err)
+	}
 	if e.events && !nameRe.MatchString(e.name) {
 		return fail("Events: Name event topic-д тохирохгүй")
 	}
