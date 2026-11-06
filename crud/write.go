@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/khan-vision/khan/audit"
 	khandb "github.com/khan-vision/khan/db"
 	"github.com/khan-vision/khan/events"
 	"github.com/khan-vision/khan/tenant"
@@ -179,7 +180,7 @@ func (e *engine) create(c fiber.Ctx) error {
 		return nil
 	}
 	if !e.allowed(c, ActionCreate) {
-		return jsonErr(c, fiber.StatusForbidden, msgForbidden)
+		return e.forbidden(c, ActionCreate)
 	}
 	body, err := e.readBody(c)
 	if err != nil {
@@ -267,6 +268,15 @@ func (e *engine) create(c fiber.Ctx) error {
 				return err
 			}
 		}
+		if e.audit != nil {
+			after, err := e.auditState(tx, orgID, idVal, len(inputs) > 0)
+			if err != nil {
+				return err
+			}
+			if err := e.auditWrite(tx, c, orgID, id, audit.ActionCreate, nil, after); err != nil {
+				return err
+			}
+		}
 		if err := e.publish(tx, orgID, "created", id, vals); err != nil {
 			return err
 		}
@@ -291,7 +301,7 @@ func (e *engine) update(c fiber.Ctx) error {
 		return nil
 	}
 	if !e.allowed(c, ActionUpdate) {
-		return jsonErr(c, fiber.StatusForbidden, msgForbidden)
+		return e.forbidden(c, ActionUpdate)
 	}
 	idVal, id, ok := e.parseID(c.Params("id"))
 	if !ok {
@@ -326,6 +336,12 @@ func (e *engine) update(c fiber.Ctx) error {
 			cur, _ := asInt64(old[e.versionCol])
 			if cur != version {
 				return Conflict(msgVersion)
+			}
+		}
+		var auditBefore map[string]any
+		if e.audit != nil { // hook/бичилтээс ӨМНӨХ төлөв (мөр түгжигдсэн)
+			if auditBefore, err = e.auditState(tx, orgID, idVal, len(inputs) > 0); err != nil {
+				return err
 			}
 		}
 		if err := e.runValidate(c, orgID, uid, ActionUpdate, id, old, vals, errs); err != nil {
@@ -387,6 +403,15 @@ func (e *engine) update(c fiber.Ctx) error {
 				return err
 			}
 		}
+		if e.audit != nil {
+			after, err := e.auditState(tx, orgID, idVal, len(inputs) > 0)
+			if err != nil {
+				return err
+			}
+			if err := e.auditWrite(tx, c, orgID, id, audit.ActionUpdate, auditBefore, after); err != nil {
+				return err
+			}
+		}
 		if err := e.publish(tx, orgID, "updated", id, vals); err != nil {
 			return err
 		}
@@ -411,7 +436,7 @@ func (e *engine) remove(c fiber.Ctx) error {
 		return nil
 	}
 	if !e.allowed(c, ActionDelete) {
-		return jsonErr(c, fiber.StatusForbidden, msgForbidden)
+		return e.forbidden(c, ActionDelete)
 	}
 	idVal, id, ok := e.parseID(c.Params("id"))
 	if !ok {
@@ -419,7 +444,7 @@ func (e *engine) remove(c fiber.Ctx) error {
 	}
 	uid := userID(c)
 	err := e.tx(c, orgID, func(tx *gorm.DB) error {
-		return e.deleteOne(c, tx, orgID, uid, idVal, id)
+		return e.deleteOne(c, tx, orgID, uid, idVal, id, false)
 	})
 	if err != nil {
 		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
@@ -432,11 +457,18 @@ func (e *engine) remove(c fiber.Ctx) error {
 }
 
 // deleteOne — нэг мөрийг устгах бүрэн дүрэм (түгжих, BeforeDelete, children cascade, soft/hard,
-// AfterDelete, event). DELETE /:id болон hook/children-тэй bulk delete хоёулаа үүнийг дуудна.
-func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal any, id string) error {
+// AfterDelete, audit, event). DELETE /:id болон hook/children-тэй bulk delete хоёулаа үүнийг дуудна
+// (bulk=true үед audit үйлдэл нь bulk_delete).
+func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal any, id string, bulk bool) error {
 	old, err := e.lockRow(tx, orgID, idVal)
 	if err != nil {
 		return err
+	}
+	var auditBefore map[string]any
+	if e.audit != nil { // hard delete үед child-ууд ч устах тул түүхэнд оруулна
+		if auditBefore, err = e.auditState(tx, orgID, idVal, !e.softDelete && len(e.children) > 0); err != nil {
+			return err
+		}
 	}
 	x := e.ctx(c, tx, orgID, uid, ActionDelete, id, old)
 	if e.hooks.BeforeDelete != nil {
@@ -472,6 +504,15 @@ func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal an
 			return err
 		}
 	}
+	if e.audit != nil {
+		a := audit.ActionDelete
+		if bulk {
+			a = audit.ActionBulkDelete
+		}
+		if err := e.auditWrite(tx, c, orgID, id, a, auditBefore, nil); err != nil {
+			return err
+		}
+	}
 	return e.publish(tx, orgID, "deleted", id, nil)
 }
 
@@ -483,7 +524,7 @@ func (e *engine) get(c fiber.Ctx) error {
 		return nil
 	}
 	if !e.allowed(c, ActionRead) {
-		return jsonErr(c, fiber.StatusForbidden, msgForbidden)
+		return e.forbidden(c, ActionRead)
 	}
 	idVal, id, ok := e.parseID(c.Params("id"))
 	if !ok {

@@ -127,9 +127,13 @@ type Resource[T any] struct {
 
 	Children []Child
 
-	Can      func(c fiber.Ctx, a Action) bool
-	Validate func(x *Ctx, v Values) error
-	Hooks    Hooks
+	Can func(c fiber.Ctx, a Action) bool
+	// OnForbidden — Can=false үед 403-ийн оронд хариуг өөрөө бичнэ (nil → `{"error":"Хандах эрхгүй байна"}`).
+	// Зөвхөн БОДИТ татгалзалт (хүсэлтийн үйлдэл) дээр дуудагдана — `can` map тооцоход биш. access.CrudForbidden
+	// нь module/capability-тай 403, Source алдаанд 503, deny hook-ийг өгнө.
+	OnForbidden func(c fiber.Ctx, a Action) error
+	Validate    func(x *Ctx, v Values) error
+	Hooks       Hooks
 
 	SoftDelete    bool
 	Version       string // optimistic lock багана (ж: "version")
@@ -145,6 +149,11 @@ type Resource[T any] struct {
 
 	// Cache — унших endpoint-уудын cache + ETag/304; nil → унтраалттай. CacheSpec, docs/CACHE.md §4.
 	Cache *CacheSpec
+
+	// Audit — өөрчлөлтийн түүх (khan/audit): create/update/delete/bulk бүрийг бизнес транзакцдаа
+	// `khan.audit_log`-д бичиж, `GET /history`, `GET /:id/history` нэмнэ. nil → унтраалттай,
+	// нөлөөгүй. AuditSpec, docs/AUDIT.md.
+	Audit *AuditSpec
 
 	DB      func() *gorm.DB
 	Org     func(c fiber.Ctx) (string, bool)

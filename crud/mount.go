@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/khan-vision/khan/audit"
 	"github.com/khan-vision/khan/obs"
 	"github.com/khan-vision/khan/query"
 	"github.com/khan-vision/khan/tenant"
@@ -48,6 +49,10 @@ func (e *engine) mount(router fiber.Router) {
 	}
 	if len(e.refs) > 0 {
 		router.Get("/options/:field", t(e.optionsHandler()))
+	}
+	if e.audit != nil {
+		router.Get("/history", t(e.audit.handlers.List))
+		router.Get("/:id/history", t(e.audit.handlers.Record))
 	}
 	router.Get("/:id", t(e.get))
 	router.Post("/", t(e.create))
@@ -88,7 +93,7 @@ func (e *engine) gate(c fiber.Ctx, a Action) (orgID string, gdb *gorm.DB, ok boo
 		return "", nil, false
 	}
 	if !e.allowed(c, a) {
-		_ = jsonErr(c, fiber.StatusForbidden, msgForbidden)
+		_ = e.forbidden(c, a)
 		return "", nil, false
 	}
 	gdb = e.db()
@@ -205,7 +210,7 @@ func (e *engine) bulkHandler(c fiber.Ctx) error {
 		if req.Action == "delete" && e.bulkDeleteNeedsRows() {
 			uid := userID(c)
 			for _, id := range ids {
-				if err := e.deleteOne(c, tx, orgID, uid, id, fmt.Sprint(id)); err != nil {
+				if err := e.deleteOne(c, tx, orgID, uid, id, fmt.Sprint(id), true); err != nil {
 					return err
 				}
 				n++
@@ -217,10 +222,29 @@ func (e *engine) bulkHandler(c fiber.Ctx) error {
 		for i, id := range ids {
 			req.IDs[i] = fmt.Sprint(id)
 		}
+		var auditBefore map[string]map[string]any
+		if e.audit != nil { // бичилтээс ӨМНӨХ төлөв (мөрүүд түгжигдсэн)
+			if auditBefore, err = e.auditStates(tx, orgID, ids, false); err != nil {
+				return err
+			}
+		}
 		if n, err = query.ExecBulk(tx, orgID, req, *e.bulk); err != nil {
 			return err
 		}
-		return e.afterBulk(c, tx, orgID, req, ids)
+		if err := e.afterBulk(c, tx, orgID, req, ids); err != nil {
+			return err
+		}
+		if e.audit == nil {
+			return nil
+		}
+		if req.Action == "delete" {
+			return e.auditBulk(tx, c, orgID, audit.ActionBulkDelete, ids, auditBefore, nil)
+		}
+		auditAfter, err := e.auditStates(tx, orgID, ids, false)
+		if err != nil {
+			return err
+		}
+		return e.auditBulk(tx, c, orgID, audit.ActionBulkUpdate, ids, auditBefore, auditAfter)
 	})
 	if err != nil {
 		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump

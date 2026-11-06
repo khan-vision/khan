@@ -4,6 +4,9 @@
 //	khan schema lint [-env .env] [-schema finance] [-tables finance.invoice,...]
 //	khan schema diff old.json new.json
 //	khan schema rls [-env .env] -schema finance [-mode soft|strict] [-o 0007_rls_finance.sql]
+//	khan gen resource -table schema.name [-form F.json] [-grid G.json] [-name N] [-label L] [-endpoint E] [-pkg P]
+//	                  [-o FILE] [-catalog catalog.json | -env .env] [-force] [-hidden createonly|keep|exclude] [-ref-label f=a+b]
+//	khan gen audit -forms DIR [-models DIR] [-grids DIR] [-catalog catalog.json | -env .env] [-force] [-v]
 //	khan migrate status -dir DIR [-env .env] [-table khan.schema_migrations]
 //	khan migrate up -dir DIR [-env .env] [-lock-timeout 5s] [-statement-timeout 15m] [-dry-run] [-lint-schema a,b]
 //
@@ -36,6 +39,11 @@ const usage = `khan — Khan library CLI
   khan schema lint [-env FILE] [-schema a,b] [-tables s.t1,s.t2]
   khan schema diff OLD.json NEW.json
   khan schema rls [-env FILE] -schema a,b [-mode soft|strict] [-o FILE]   (org_id-тэй хүснэгтийн RLS policy SQL)
+  khan gen resource -table s.t [-form F.json] [-grid G.json] [-name N] [-label L] [-endpoint E] [-pkg P] [-o FILE]
+                    [-catalog catalog.json | -env FILE] [-force] [-hidden createonly|keep|exclude] [-ref-label f=a+b]
+                    (хуучин Lambda form/grid + DB бүтцээс crud.Resource-ийн Go ноорог; docs/GEN.md)
+  khan gen audit -forms DIR [-models DIR] [-grids DIR] [-catalog catalog.json | -env FILE] [-force] [-v]
+                    (олон формыг файл бичихгүй шалгаж, TODO-ийн статистик гаргана)
   khan migrate status -dir DIR [-env FILE] [-table NAME] [-allow-missing]
   khan migrate up -dir DIR [-env FILE] [-table NAME] [-lock-timeout 5s] [-statement-timeout 15m]
                   [-allow-missing] [-dry-run] [-lint-schema a,b]
@@ -49,9 +57,12 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) < 2 || (args[0] != "schema" && args[0] != "migrate") {
+	if len(args) < 2 || (args[0] != "schema" && args[0] != "migrate" && args[0] != "gen") {
 		fmt.Fprint(stderr, usage)
 		return fmt.Errorf("команд буруу")
+	}
+	if args[0] == "gen" {
+		return genCmd(args[1:], stdout, stderr)
 	}
 	if args[0] == "migrate" {
 		switch args[1] {

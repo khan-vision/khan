@@ -83,3 +83,11 @@ func (e *engine) fail(c fiber.Ctx, action Action, err error) error {
 	obs.With(c).Error("crud: дотоод алдаа", "resource", e.name, "action", string(action), "err", err)
 	return jsonErr(c, fiber.StatusInternalServerError, msgInternal)
 }
+
+// forbidden — бодит татгалзалтын хариу (OnForbidden эсвэл анхдагч 403).
+func (e *engine) forbidden(c fiber.Ctx, a Action) error {
+	if e.onForbidden != nil {
+		return e.onForbidden(c, a)
+	}
+	return jsonErr(c, fiber.StatusForbidden, msgForbidden)
+}

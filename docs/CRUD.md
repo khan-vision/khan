@@ -22,6 +22,7 @@ Resource `Endpoint` (ж: `/api/organization/conference/rooms`) дээр mount х
 | POST | `/bulk` | `Bulk` өгсөн бол. Эрх нь үйлдлээр: `delete` → `Can(ActionDelete)`, бусад (`update` ба үл мэдэгдэх) → `Can(ActionUpdate)`. RLS үед `tenant.Tx` дотор |
 | GET | `/meta` | `Meta` + `can` — `ExposeMeta: true` үед л (`ActionRead`) |
 | GET | `/options/:field` | Ref талбарын сонголт (`lookup`, `ActionRead`): `?search=&parent=&ids=a,b&limit=` → `{data:[{value,label,parent_value?}]}`. `:field` = талбарын нэр, child-ийн хувьд `<child>.<field>` (ж: `lines.item_id`) |
+| GET | `/history`, `/:id/history` | `Audit.Enabled` үед л (`ActionRead`, org-оор тусгаарласан, шинэ нь эхэнд, `?page&limit&actor_id&action&from&to`). docs/AUDIT.md |
 | GET | `/:id` | Дэлгэрэнгүй: мөр + children массив (child бүр `[]`-ээс эхлэн, `Order`-оор) |
 | POST | `/` | Үүсгэх → **201** + дэлгэрэнгүй мөр |
 | PUT | `/:id` | Засах (хэсэгчилсэн — body-д байгаа зарласан талбар л) → 200 + дэлгэрэнгүй мөр |
@@ -47,6 +48,7 @@ Date → `"YYYY-MM-DD"`, JSON → түүхий JSON, Money/Number → яг ци�
 | 409 | `{"error":"..."}` | Version зөрсөн, hook-ийн `Conflict(...)`, unique constraint (23505), FK (23503), deadlock/lock timeout. Constraint-ийн нэр/текст хэзээ ч body-д орохгүй |
 | 422 | `{"error":"Мэдээлэл буруу","errors":{"field":["msg"]}}` | Талбарын шалгалт, ref-ийн org, unique, `version` байхгүй, children. Child талбарын түлхүүр: `lines.0.qty` (UForm нэршил). DB-ийн хэт урт/хэт том утга (22001/22003) → 422 `{"error":"Утга хэт урт эсвэл хэт том байна"}` |
 | 500 | `{"error":"Дотоод алдаа гарлаа"}` | Бусад. **Жинхэнэ алдааг хэзээ ч body-д бичихгүй** — `obs.From(ctx)`-оор логлоно |
+| 501 | `Resource.OnForbidden func(c, Action) error` — БОДИТ татгалзалт (хүсэлтийн үйлдэл) дээр 403-ийн оронд хариуг өөрөө бичнэ; `can` map тооцоход дуудагдахгүй. `access.CrudForbidden` нь module/capability-тай 403, Source алдаанд 503, deny hook өгнө | Frontend (`finance/services/api.ts`) 403-оос module/capability уншдаг; `can` map-ийн 4 шалгалт хуурамч denial үүсгэхгүй байх |
 
 ## 2. Аюулгүй байдлын инвариантууд (тест бүрээр батлагдана)
 
@@ -119,6 +121,8 @@ type Resource[T any] struct {
     ExposeMeta    bool
     Cache         *crud.CacheSpec // nil → унтраалттай. GET /, POST /query, GET /:id, GET /options/:field-ийн хариуны cache + ETag/304;
                                   // бичилт commit болсны дараа bump. Гэрээ: docs/CACHE.md §4
+    Audit         *crud.AuditSpec // nil → унтраалттай. {Enabled, Snapshot, Exclude}: create/update/delete/bulk бүрийг ижил транзакцад
+                                  // khan.audit_log-д бичиж, GET /history + GET /:id/history нэмнэ. Гэрээ: docs/AUDIT.md
 
     DB  func() *gorm.DB                  // ЗААВАЛ
     Org func(c fiber.Ctx) (string, bool) // nil → tenant.Require
@@ -414,6 +418,7 @@ Cleanup: үүсгэсэн мөрийг API-аар (DELETE) устгана (best 
 | 20 | `codegen`: `Meta` нь `ExposeMeta`, child id багана (`"id"` гэж үзнэ)-г агуулдаггүй; OpenAPI `/meta` нь `Info.MetaRoutes`-оор нэг дор | Meta-г өөрчлөхгүйгээр (crud-д хөндөхгүй) codegen/crudtest нэмсэн; хэрэгтэй бол `Meta.ExposeMeta`, `ChildMeta.IDColumn` нэмнэ |
 | 21 | Decimal: Row `number`, Payload `number \| string` (zod union + scale/range шалгалт) | Хариу нь яг цифртэй JSON тоо, хүсэлт тоо эсвэл мөр (§6) |
 | 22 | `Resource.Cache` (`CacheSpec`): унших 4 endpoint-ийн org-тусгаарлагдсан generation cache + ETag/304, бичилт commit-ийн дараа bump | GraphQL/apollo client cache-ийг орлоно; `can` cache-д ордоггүй, read эрх cache-ээс өмнө; 4xx/5xx cache-д ордоггүй; `ListQuery` нь хэрэглэгчээс хамаарсан бол Cache тавихгүй. [docs/CACHE.md](CACHE.md) |
+| 23 | `Resource.Audit` (`AuditSpec`): create/update/delete/bulk бүрийг `khan.audit_log`-д бизнес транзакцдаа (old → new, зөвхөн өөрчлөгдсөн талбар) бичнэ; Password хэзээ ч бичигдэхгүй; audit бичилт унавал бүх бичилт буцна | `crudlogger` нь үйлдлийн гадна, түүхий input бичдэг байсан. [docs/AUDIT.md](AUDIT.md) |
 
 **Unique-ийн шаардлага:** `Unique: true` талбар нь апп түвшний шалгалт (TOCTOU) тул DB-д заавал
 `UNIQUE (org_id, col) [WHERE deleted_at IS NULL]` index байх ёстой — org_id-гүй global index бусад байгууллагад тухайн

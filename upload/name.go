@@ -94,8 +94,8 @@ func keepASCII(s string) string {
 // түүнээс хойш `base-<random>.ext` (өндөр зэрэгцээ ачаалалд хурдан шийдэгдэнэ).
 // candidateName — хадгалах нэрийн i дэх хувилбар. Анхдагч: `<base>-<16 hex>.<ext>`
 // (таашгүй, давхцал бараг үгүй). LambdaCompat: `<base>.<ext>`, `<base>-1.<ext>` …
-func (u *Uploader) candidateName(base, ext string, i int) string {
-	if !u.cfg.LambdaCompat {
+func (u *Uploader) candidateName(base, ext string, i int, compat bool) string {
+	if !compat {
 		return base + "-" + randomHex(8) + "." + ext
 	}
 	switch {

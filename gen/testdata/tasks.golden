@@ -1,0 +1,218 @@
+// khan gen resource-оор үүсгэсэн НОРООГ (docs/GEN.md): гараар засна — `TODO(khan-gen)` тайлбаруудыг
+// шийдэж, hook нэмээд crudtest.Isolation-аар шалга. Дахин generate хийвэл гар засварыг дарна.
+package resources
+
+import (
+	"github.com/gofiber/fiber/v3"
+	"github.com/khan-vision/khan/crud"
+	"github.com/khan-vision/khan/lookup"
+	"github.com/khan-vision/khan/query"
+	"github.com/khan-vision/khan/validate"
+	"gorm.io/gorm"
+)
+
+// TasksResource — Ажил (planning.tasks).
+func TasksResource(db func() *gorm.DB, can func(fiber.Ctx, crud.Action) bool) *crud.Resource[map[string]any] {
+	return &crud.Resource[map[string]any]{
+		// PK (org_id,id) нийлмэл — org_id хасч id-ийг ID болгов
+		// TODO(khan-gen) [column-missing] project_weight_progress: хуучин формын талбар planning.tasks-д байхгүй (Number) — virtual/өөр хүснэгтийн талбар уу?
+		// TODO(khan-gen) [column-missing] gantt_order: хуучин формын талбар planning.tasks-д байхгүй (Text) — virtual/өөр хүснэгтийн талбар уу?
+		// Формд ороогүй багана (write allowlist-д ороогүй): is_milestone
+		// TODO(khan-gen) [fill-by-user] emp_id: fillByUserField="emp_id" — сервер (JWT) тавина; Hooks.BeforeCreate-д x.UserID/x.OrgID-оос ол
+		Name:     "planning.tasks",
+		Label:    "Ажил",
+		Endpoint: "/api/planning/tasks",
+		Table:    "planning.tasks",
+		ID:       crud.IDSpec{Kind: crud.IDUUID},
+
+		Fields: []crud.Field{
+			{
+				Name:  "task",
+				Label: "Ажил",
+				Kind:  validate.String,
+				Rules: validate.Rules{Required: true, MaxLen: 255},
+			},
+			{
+				Name:  "start_date",
+				Label: "Эхлэх огноо",
+				Kind:  validate.Date,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "end_date",
+				Label: "Дуусах огноо",
+				Kind:  validate.Date,
+				Rules: validate.Rules{Nullable: true},
+			},
+			// rich text (CK) — MaxLen 100000
+			{
+				Name:  "description",
+				Label: "Тайлбар",
+				Kind:  validate.Text,
+				Rules: validate.Rules{Nullable: true, MaxLen: 100000},
+				Input: "richText",
+			},
+			// TODO(khan-gen) [custom-element] progress: custom элемент "taskPercent" — front_end registry editor (Field.Input) сонго; backend утга: float4
+			{
+				Name:  "progress",
+				Label: "Гүйцэтгэлийн хувь",
+				Kind:  validate.Number,
+				Rules: validate.Rules{Required: true},
+			},
+			// TODO(khan-gen) [custom-element] priority_id: custom элемент "taskPriority" — front_end registry editor (Field.Input) сонго; backend утга: uuid
+			// cascade: GET options?parent=<project_id>
+			{
+				Name:  "priority_id",
+				Label: "Ажлын зэрэглэл",
+				Kind:  validate.UUID,
+				Rules: validate.Rules{Nullable: true},
+				Ref: &lookup.Spec{
+					Table:      "planning.project_priorities",
+					Label:      []string{"priority"},
+					Parent:     "project_id",
+					SoftDelete: true,
+					Order:      "priority",
+				},
+			},
+			// legacy: hidden — зөвхөн create үед (UI контекстээс ирнэ)
+			{
+				Name:       "project_id",
+				Label:      "project_id",
+				Kind:       validate.UUID,
+				Rules:      validate.Rules{Required: true},
+				CreateOnly: true,
+			},
+			// legacy: hidden — зөвхөн create үед (UI контекстээс ирнэ)
+			{
+				Name:       "parent_id",
+				Label:      "parent_id",
+				Kind:       validate.UUID,
+				Rules:      validate.Rules{Nullable: true},
+				CreateOnly: true,
+			},
+			// legacy: hidden — зөвхөн create үед (UI контекстээс ирнэ)
+			{
+				Name:       "stage_id",
+				Label:      "stage_id",
+				Kind:       validate.UUID,
+				Rules:      validate.Rules{Required: true},
+				CreateOnly: true,
+			},
+			// legacy: hidden — зөвхөн create үед (UI контекстээс ирнэ)
+			{
+				Name:       "task_order",
+				Label:      "task_order",
+				Kind:       validate.String,
+				Rules:      validate.Rules{MaxLen: 255},
+				CreateOnly: true,
+			},
+			{
+				Name:  "color",
+				Label: "Өнгө",
+				Kind:  validate.String,
+				Rules: validate.Rules{Nullable: true, MaxLen: 255},
+				Input: "color",
+			},
+		},
+
+		List: query.Spec{
+			Search: []string{"t.task", "t.description", "t.task_order", "t.color"},
+			Sort: map[string]string{
+				"color":        "t.color",
+				"created_at":   "t.created_at",
+				"description":  "t.description",
+				"emp_id":       "t.emp_id",
+				"end_date":     "t.end_date",
+				"id":           "t.id",
+				"is_milestone": "t.is_milestone",
+				"parent_id":    "t.parent_id",
+				"priority_id":  "t.priority_id",
+				"progress":     "t.progress",
+				"project_id":   "t.project_id",
+				"stage_id":     "t.stage_id",
+				"start_date":   "t.start_date",
+				"task":         "t.task",
+				"task_order":   "t.task_order",
+				"updated_at":   "t.updated_at",
+			},
+			Filters: map[string]query.FilterCol{
+				"color":        query.Text("t.color"),
+				"created_at":   query.Date("t.created_at"),
+				"description":  query.Text("t.description"),
+				"emp_id":       query.UUID("t.emp_id"),
+				"end_date":     query.Date("t.end_date"),
+				"is_milestone": query.Bool("t.is_milestone"),
+				"parent_id":    query.UUID("t.parent_id"),
+				"priority_id":  query.UUID("t.priority_id"),
+				"progress":     query.Number("t.progress"),
+				"project_id":   query.UUID("t.project_id"),
+				"stage_id":     query.UUID("t.stage_id"),
+				"start_date":   query.Date("t.start_date"),
+				"task":         query.Text("t.task"),
+				"task_order":   query.Text("t.task_order"),
+				"updated_at":   query.Date("t.updated_at"),
+			},
+			DefaultOrder: "t.created_at DESC, t.id DESC",
+		},
+
+		Children: []crud.Child{
+			{
+				Name:  "task_members",
+				Label: "Орлцогчид",
+				Table: "planning.task_members",
+				FK:    "task_id",
+				ID:    crud.IDSpec{Kind: crud.IDUUID},
+				Fields: []crud.Field{
+					{
+						Name:  "project_id",
+						Label: "project_id",
+						Kind:  validate.UUID,
+						Rules: validate.Rules{Required: true},
+					},
+					{
+						Name:  "emp_id",
+						Label: "emp_id",
+						Kind:  validate.UUID,
+						Rules: validate.Rules{Required: true},
+					},
+					{
+						Name:  "task_weight_progress",
+						Label: "task_weight_progress",
+						Kind:  validate.Number,
+						Rules: validate.Rules{Nullable: true},
+					},
+				},
+			},
+			{
+				Name:  "task_sub_task_group",
+				Label: "Дэд ажилбарын бүлэг",
+				Table: "planning.task_sub_task_group",
+				FK:    "task_id",
+				ID:    crud.IDSpec{Kind: crud.IDUUID},
+				Fields: []crud.Field{
+					// legacy: disabled (readonly) — зөвхөн create үед
+					{
+						Name:       "project_id",
+						Label:      "project_id",
+						Kind:       validate.UUID,
+						Rules:      validate.Rules{Required: true},
+						CreateOnly: true,
+					},
+					// legacy: disabled (readonly) — зөвхөн create үед
+					{
+						Name:       "title",
+						Label:      "title",
+						Kind:       validate.String,
+						Rules:      validate.Rules{Required: true, MaxLen: 255},
+						CreateOnly: true,
+					},
+				},
+			},
+		},
+
+		SoftDelete: true,
+
+		Can: can,
+		DB:  db,
+	}
+}

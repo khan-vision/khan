@@ -83,6 +83,7 @@ type engine struct {
 
 	softDelete    bool
 	versionCol    string
+	onForbidden   func(c fiber.Ctx, a Action) error
 	protected     map[string]bool // hook-ийн дараа Values-аас хасагдах баганууд
 	timeout       time.Duration
 	timestamps    bool
@@ -97,6 +98,7 @@ type engine struct {
 	org func(c fiber.Ctx) (string, bool)
 
 	cache *cachePlan // nil = cache унтраалттай
+	audit *auditPlan // nil = түүх унтраалттай
 
 	decimals []*fieldPlan    // Money/Number талбарууд (хариунд яг decimal-аар)
 	pwCols   map[string]bool // Password төрлийн баганууд (хариу/event-ээс хасна)
@@ -116,7 +118,7 @@ func (r *Resource[T]) build(runtime bool) (*engine, error) {
 		list: r.ListQuery, detail: r.DetailQuery, listSpec: r.List, export: r.Export, bulk: r.Bulk,
 		can: r.Can, validate: r.Validate, hooks: r.Hooks,
 		softDelete: r.SoftDelete, versionCol: r.Version, trackUser: r.TrackUser, rls: r.RLS,
-		events: r.Events, strictUnknown: r.StrictUnknown, maxBody: r.MaxBody, exposeMeta: r.ExposeMeta, timeout: r.Timeout,
+		events: r.Events, strictUnknown: r.StrictUnknown, maxBody: r.MaxBody, exposeMeta: r.ExposeMeta, timeout: r.Timeout, onForbidden: r.OnForbidden,
 		db: r.DB, org: r.Org, newRows: r.NewRows,
 		timestamps: r.Timestamps == nil || *r.Timestamps,
 		byName:     map[string]*fieldPlan{},
@@ -238,6 +240,9 @@ func (r *Resource[T]) build(runtime bool) (*engine, error) {
 	}
 
 	if e.cache, err = compileCache(r.Name, r.Cache); err != nil {
+		return fail("%v", err)
+	}
+	if e.audit, err = e.compileAudit(r.Audit, runtime); err != nil {
 		return fail("%v", err)
 	}
 	if e.events && !nameRe.MatchString(e.name) {

@@ -84,63 +84,88 @@ func (u *Uploader) Serve() fiber.Handler {
 			obs.From(c.Context()).Error("upload: файл нээх алдаа", "path", rel, "error", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Серверийн алдаа"})
 		}
-		streaming := false
-		defer func() {
-			if !streaming {
-				_ = f.Close()
-			}
-		}()
-
-		ext := ""
-		if i := strings.LastIndexByte(name, '.'); i >= 0 {
-			ext = strings.ToLower(name[i+1:])
+		cc := cacheControl
+		if fi.Size() == 0 {
+			// 0 байт файл бүрэн бус байж болзошгүй: нэг жил кэшлүүлэхгүй, үргэлж дахин шалгуулна.
+			cc = "public, max-age=0, must-revalidate"
 		}
-		c.Set(fiber.HeaderContentType, contentTypeFor(ext))
-		c.Set(fiber.HeaderCacheControl, cacheControl)
-		c.Set(fiber.HeaderAcceptRanges, "bytes")
-		if activeExt[ext] {
-			c.Set(fiber.HeaderContentSecurityPolicy, sandboxCSP)
-		}
-		if !inlineExt[ext] {
-			c.Set(fiber.HeaderContentDisposition, mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-		}
-		etag := `W/"` + strconv.FormatInt(fi.Size(), 16) + "-" + strconv.FormatInt(fi.ModTime().UnixNano(), 16) + `"`
-		lastMod := fi.ModTime().UTC().Format(http.TimeFormat)
-		c.Set(fiber.HeaderETag, etag)
-		c.Set(fiber.HeaderLastModified, lastMod)
-
-		if notModified(c, etag, fi.ModTime().Unix()) {
-			return c.SendStatus(fiber.StatusNotModified)
-		}
-
-		size := fi.Size()
-		start, length, status := int64(0), size, fiber.StatusOK
-		if rh := c.Get(fiber.HeaderRange); rh != "" && method == fiber.MethodGet {
-			if ir := c.Get(fiber.HeaderIfRange); ir == "" || ir == etag || ir == lastMod {
-				s, l, state := parseRange(rh, size)
-				switch state {
-				case rangeOK:
-					start, length, status = s, l, fiber.StatusPartialContent
-					c.Set(fiber.HeaderContentRange, "bytes "+strconv.FormatInt(s, 10)+"-"+strconv.FormatInt(s+l-1, 10)+"/"+strconv.FormatInt(size, 10))
-				case rangeUnsatisfiable:
-					c.Set(fiber.HeaderContentRange, "bytes */"+strconv.FormatInt(size, 10))
-					return c.SendStatus(fiber.StatusRequestedRangeNotSatisfiable)
-				}
-			}
-		}
-		c.Status(status)
-		if method == fiber.MethodHead || length == 0 {
-			c.Response().Header.SetContentLength(int(length))
-			return nil
-		}
-		if start > 0 {
-			if _, err := f.Seek(start, io.SeekStart); err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Серверийн алдаа"})
-			}
-		}
-		streaming = true
-		return c.SendStream(readCloser{io.LimitReader(f, length), f}, int(length))
+		return respondFile(c, f, fi, name, respondOpts{cacheControl: cc})
 	}
+}
+
+// respondOpts — respondFile-ийн хувилбарууд (public/private).
+type respondOpts struct {
+	cacheControl string
+	// disposition — "attachment" үргэлж татуулна; "inline" зөвхөн inlineExt-д; "" төрлөөс.
+	disposition string
+	// private — Referrer-Policy/X-Robots-Tag нэмнэ (URL-д гарын үсэг байдаг).
+	private bool
+}
+
+// respondFile — нээгдсэн f-ийг (header, ETag/304, Range, HEAD) хариулна; f-ийг
+// өөрөө хаана (stream эхэлсэн бол stream дуусахад).
+func respondFile(c fiber.Ctx, f io.ReadSeekCloser, fi fs.FileInfo, name string, o respondOpts) error {
+	method := c.Method()
+	streaming := false
+	defer func() {
+		if !streaming {
+			_ = f.Close()
+		}
+	}()
+
+	ext := ""
+	if i := strings.LastIndexByte(name, '.'); i >= 0 {
+		ext = strings.ToLower(name[i+1:])
+	}
+	c.Set(fiber.HeaderContentType, contentTypeFor(ext))
+	c.Set(fiber.HeaderCacheControl, o.cacheControl)
+	c.Set(fiber.HeaderAcceptRanges, "bytes")
+	if o.private {
+		c.Set(fiber.HeaderReferrerPolicy, "no-referrer")
+		c.Set("X-Robots-Tag", "noindex, noarchive")
+	}
+	if activeExt[ext] {
+		c.Set(fiber.HeaderContentSecurityPolicy, sandboxCSP)
+	}
+	if o.disposition == DispositionAttachment || !inlineExt[ext] {
+		c.Set(fiber.HeaderContentDisposition, mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	}
+	etag := `W/"` + strconv.FormatInt(fi.Size(), 16) + "-" + strconv.FormatInt(fi.ModTime().UnixNano(), 16) + `"`
+	lastMod := fi.ModTime().UTC().Format(http.TimeFormat)
+	c.Set(fiber.HeaderETag, etag)
+	c.Set(fiber.HeaderLastModified, lastMod)
+
+	if notModified(c, etag, fi.ModTime().Unix()) {
+		return c.SendStatus(fiber.StatusNotModified)
+	}
+
+	size := fi.Size()
+	start, length, status := int64(0), size, fiber.StatusOK
+	if rh := c.Get(fiber.HeaderRange); rh != "" && method == fiber.MethodGet {
+		if ir := c.Get(fiber.HeaderIfRange); ir == "" || ir == etag || ir == lastMod {
+			s, l, state := parseRange(rh, size)
+			switch state {
+			case rangeOK:
+				start, length, status = s, l, fiber.StatusPartialContent
+				c.Set(fiber.HeaderContentRange, "bytes "+strconv.FormatInt(s, 10)+"-"+strconv.FormatInt(s+l-1, 10)+"/"+strconv.FormatInt(size, 10))
+			case rangeUnsatisfiable:
+				c.Set(fiber.HeaderContentRange, "bytes */"+strconv.FormatInt(size, 10))
+				return c.SendStatus(fiber.StatusRequestedRangeNotSatisfiable)
+			}
+		}
+	}
+	c.Status(status)
+	if method == fiber.MethodHead || length == 0 {
+		c.Response().Header.SetContentLength(int(length))
+		return nil
+	}
+	if start > 0 {
+		if _, err := f.Seek(start, io.SeekStart); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Серверийн алдаа"})
+		}
+	}
+	streaming = true
+	return c.SendStream(readCloser{io.LimitReader(f, length), f}, int(length))
 }
 
 type readCloser struct {

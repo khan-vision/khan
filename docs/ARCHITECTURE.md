@@ -66,6 +66,21 @@ Go↔TS codegen нь `crud.Resource`-ийн тодорхойлолтоос ха�
 - **crudtest**: resource бүрд tenant leak тест (9 subtest).
 - **upload**: аюулгүй файл оруулах/үйлчлэх (агуулгын шалгалт, SVG sanitizer, таашгүй нэр, `LambdaCompat`).
 
+## v0.5.0 — cache ✅
+
+Generation-based cache (L1 + Redis), ETag/304 DB-гүй, commit-ийн дараа bump → [CACHE.md](CACHE.md).
+
+## v0.6.0 — access, money, jobs, audit, upload private, gen ✅
+
+Package бүр бие даасан аюулгүй байдлын review-ээр шалгагдаж, олдворууд засагдсан:
+- money: JPY/KRW-ийн бутархай
+- jobs: claim race, lease алдах, org-оор unique, cancel
+- audit: дараалал, мөрийн харагдах эрх, append-only, хуудаслалт
+- upload: атомаар хадгалах, signing алдаа, symlink
+- crud: `OnForbidden`
+
+`khan gen audit`-ийн дүн (113 хуучин form): 43-ын хүснэгтэд `org_id` алга. P4-өөс өмнө эдгээрийг migration хийх эсвэл global хүснэгт гэж шийдэх хэрэгтэй.
+
 ## Дараагийн package-ууд (P1+)
 
 - **auth**: HS256 issue/verify. Claim нэр (`id`, `login`, `role`, `org_id`, `extra_role`, `portal_only`, `sid`)

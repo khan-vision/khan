@@ -1,0 +1,54 @@
+// khan gen resource-оор үүсгэсэн НОРООГ (docs/GEN.md): гараар засна — `TODO(khan-gen)` тайлбаруудыг
+// шийдэж, hook нэмээд crudtest.Isolation-аар шалга. Дахин generate хийвэл гар засварыг дарна.
+package resources
+
+import (
+	"github.com/gofiber/fiber/v3"
+	"github.com/khan-vision/khan/crud"
+	"github.com/khan-vision/khan/query"
+	"github.com/khan-vision/khan/validate"
+	"gorm.io/gorm"
+)
+
+// LutPeriodResource — Чөлөөний хугацаа (attendance.lut_period).
+func LutPeriodResource(db func() *gorm.DB, can func(fiber.Ctx, crud.Action) bool) *crud.Resource[map[string]any] {
+	return &crud.Resource[map[string]any]{
+		// PK (org_id,id) нийлмэл — org_id хасч id-ийг ID болгов
+		Name:     "attendance.lut_period",
+		Label:    "Чөлөөний хугацаа",
+		Endpoint: "/api/attendance/lut-period",
+		Table:    "attendance.lut_period",
+		ID:       crud.IDSpec{Kind: crud.IDInt},
+
+		Fields: []crud.Field{
+			{
+				Name:   "period",
+				Label:  "Чөлөөний хугацаа",
+				Kind:   validate.String,
+				Rules:  validate.Rules{Nullable: true, MaxLen: 255},
+				Unique: true,
+			},
+		},
+
+		List: query.Spec{
+			Search: []string{"t.period"},
+			Sort: map[string]string{
+				"created_at": "t.created_at",
+				"id":         "t.id",
+				"period":     "t.period",
+				"updated_at": "t.updated_at",
+			},
+			Filters: map[string]query.FilterCol{
+				"created_at": query.Date("t.created_at"),
+				"period":     query.Text("t.period"),
+				"updated_at": query.Date("t.updated_at"),
+			},
+			DefaultOrder: "t.created_at DESC, t.id DESC",
+		},
+
+		SoftDelete: true,
+
+		Can: can,
+		DB:  db,
+	}
+}

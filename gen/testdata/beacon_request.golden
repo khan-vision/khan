@@ -1,0 +1,85 @@
+// khan gen resource-оор үүсгэсэн НОРООГ (docs/GEN.md): гараар засна — `TODO(khan-gen)` тайлбаруудыг
+// шийдэж, hook нэмээд crudtest.Isolation-аар шалга. Дахин generate хийвэл гар засварыг дарна.
+package resources
+
+import (
+	"github.com/gofiber/fiber/v3"
+	"github.com/khan-vision/khan/crud"
+	"github.com/khan-vision/khan/lookup"
+	"github.com/khan-vision/khan/query"
+	"github.com/khan-vision/khan/validate"
+	"gorm.io/gorm"
+)
+
+// BeaconRequestResource — Beacon хүсэлт (attendance.beacon_request).
+//
+// schema.Lint зөрчил:
+//   - attendance.beacon_request.deleted_at [timestamps] deleted_at багана алга
+func BeaconRequestResource(db func() *gorm.DB, can func(fiber.Ctx, crud.Action) bool) *crud.Resource[map[string]any] {
+	return &crud.Resource[map[string]any]{
+		// PK (org_id,id) нийлмэл — org_id хасч id-ийг ID болгов
+		Name:     "attendance.beacon_request",
+		Label:    "Beacon хүсэлт",
+		Endpoint: "/api/attendance/beacon-request",
+		Table:    "attendance.beacon_request",
+		ID:       crud.IDSpec{Kind: crud.IDUUID},
+
+		Fields: []crud.Field{
+			// TODO(khan-gen) [custom-element] stuct_id: custom элемент "orgStructSelector" — front_end registry editor (Field.Input) сонго; backend утга: uuid
+			// TODO(khan-gen) [relation] stuct_id: legacy relation.fields [struct_name] organization.struct-д байхгүй — Label таамагласан
+			{
+				Name:  "stuct_id",
+				Label: "Салбар",
+				Kind:  validate.UUID,
+				Rules: validate.Rules{Required: true},
+				Ref: &lookup.Spec{
+					Table:      "organization.struct",
+					Label:      []string{"struct"},
+					SoftDelete: true,
+					Order:      "id",
+				},
+			},
+			{
+				Name:   "imei",
+				Label:  "IMEI код",
+				Kind:   validate.String,
+				Rules:  validate.Rules{Required: true, MaxLen: 50},
+				Unique: true,
+			},
+			{
+				Name:  "status",
+				Label: "Төлөв",
+				Kind:  validate.Enum,
+				Rules: validate.Rules{
+					Required: true,
+					Enum:     []string{"Хүлээгдэж буй", "Цуцлагдсан", "Баталгаажсан"},
+				},
+			},
+		},
+
+		List: query.Spec{
+			Search: []string{"t.imei", "t.status"},
+			Sort: map[string]string{
+				"created_at": "t.created_at",
+				"id":         "t.id",
+				"imei":       "t.imei",
+				"status":     "t.status",
+				"stuct_id":   "t.stuct_id",
+				"updated_at": "t.updated_at",
+			},
+			DefaultOrder: "t.id DESC",
+			DefaultLimit: 50,
+		},
+		Export: &query.ExportSpec{
+			FileName: "beacon_request",
+			Columns: []query.ExportColumn{
+				{Key: "id", Header: "id", Expr: "t.id"},
+				{Key: "imei", Header: "IMEI код", Expr: "t.imei"},
+				{Key: "status", Header: "Төлөв", Expr: "t.status"},
+			},
+		},
+
+		Can: can,
+		DB:  db,
+	}
+}

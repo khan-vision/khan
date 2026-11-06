@@ -25,6 +25,10 @@
 //     анхдагчаар файлын нэрэнд 64 битийн санамсаргүй хэсэг нэмж URL-ийг таашгүй
 //     болгоно (`geree-3f9a0c1d2e4b5a6f.pdf`); lambda-ийн `geree_1.pdf` маягийн
 //     нэрийг дарааллаар нь таамаглаж бусдын баримтыг татах боломжтой байсан.
+//   - Мэдрэмтгий файл (гэрээ, цалин, ХН) = Private харагдах байдал: тусдаа хавтас
+//     `<PrivateRoot>/<org>/...`, Serve() хэзээ ч үйлчлэхгүй; HMAC гарын үсэгтэй богино
+//     настай URL (Signer, ServePrivate) эсвэл нэвтэрсэн org-гишүүнд (ServePrivateAuth).
+//     Дэлгэрэнгүй: docs/UPLOAD.md.
 package upload
 
 import (
@@ -38,6 +42,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -47,6 +52,7 @@ import (
 	"github.com/khan-vision/khan/auth"
 	"github.com/khan-vision/khan/config"
 	"github.com/khan-vision/khan/obs"
+	"github.com/khan-vision/khan/tenant"
 )
 
 // Анхдагч утгууд.
@@ -95,6 +101,32 @@ type Config struct {
 	// AllowAnonymous — true бол нэвтрээгүй хүсэлтийг Handler өөрөө хаахгүй (нийтийн
 	// форм). Анхдагч false: auth.User(c) байхгүй бол 401.
 	AllowAnonymous bool
+
+	// DefaultVisibility — файлын харагдах байдал (хоосон → Public). Handler-ийн
+	// `visibility` талбар хоосон үед үүнийг хэрэглэнэ.
+	DefaultVisibility Visibility
+	// AllowedVisibilities — клиент хүсэж болох харагдах байдлын allowlist
+	// (nil → public, private хоёулаа). DefaultVisibility үүнд багтах ёстой. Зөвхөн
+	// Private зөвшөөрвөл клиент `visibility=public` илгээж файлыг нийтэд гаргаж
+	// чадахгүй.
+	AllowedVisibilities []Visibility
+	// PrivateRoot — хувийн файлын диск хавтас. Хоосон + Storage=nil бол
+	// `<Root>/private`. АНХААР: энэ хавтсыг статик файл серверээр ХЭЗЭЭ Ч бүү
+	// нийтлэ; Root өөрөө статикаар үйлчлэгддэг бол PrivateRoot-ийг Root-оос ГАДНА тавь.
+	PrivateRoot string
+	// PrivateStorage — хувийн файлын backend (S3 …). Public Storage-аас ЗААВАЛ
+	// ТУСДАА байх ёстой. Storage өгсөн ба PrivateStorage/PrivateRoot хоосон бол
+	// хувийн файл дэмжигдэхгүй (Private оруулахад 501).
+	PrivateStorage Storage
+	// Signer — хувийн файлын гарын үсэгтэй URL (nil бол Result.URL хоосон;
+	// ServePrivateAuth-аар л уншигдана).
+	Signer *Signer
+	// PrivatePrefix — хувийн файлын URL угтвар. Хоосон бол Signer.Prefix() эсвэл
+	// "/files/private"; Signer-тэй зөрвөл New алдаа өгнө.
+	PrivatePrefix string
+	// PrivateURLTTL — оруулсны хариуны `url`-ийн хүчинтэй хугацаа (анхдагч 5 мин,
+	// Signer.MaxTTL-ээс ихгүй).
+	PrivateURLTTL time.Duration
 }
 
 // FromConfig — config.Upload-ээс Config (MaxBytes, thumbnail идэвхтэй).
@@ -114,6 +146,12 @@ type Result struct {
 	Size  int64  `json:"size"`            // байт
 	Type  string `json:"type"`            // ангилал: images|documents|videos|audios
 	Thumb string `json:"thumb,omitempty"` // /uploaded/images/.../thumb_a.jpg
+
+	// Зөвхөн Private-д. Path нь opaque (`private/<org>/<cat>/<yyyy>/<mm>/<name>`) —
+	// шууд татагдахгүй; URL нь богино настай гарын үсэгтэй холбоос.
+	Visibility Visibility `json:"visibility,omitempty"`
+	ExpiresAt  int64      `json:"expires_at,omitempty"` // URL-ийн дуусах unix секунд
+	ThumbURL   string     `json:"thumb_url,omitempty"`
 }
 
 // Error — клиентэд харуулах алдаа (HTTP статустай).
@@ -137,6 +175,14 @@ type Uploader struct {
 	now     func() time.Time
 	thumbs  chan struct{}
 	once    sync.Once
+
+	privStorage Storage
+	privLocal   *LocalStorage
+	signer      *Signer
+	privPrefix  string
+	privTTL     time.Duration
+	defVis      Visibility
+	allowedVis  map[Visibility]bool
 }
 
 // New — Config-г шалгаж Uploader үүсгэнэ.
@@ -191,7 +237,131 @@ func New(cfg Config) (*Uploader, error) {
 		}
 		u.local, u.storage = ls, ls
 	}
+	if err := u.initPrivate(); err != nil {
+		_ = u.Close()
+		return nil, err
+	}
 	return u, nil
+}
+
+// initPrivate — visibility allowlist, хувийн Storage ба Signer-ийг шалгаж тохируулна.
+func (u *Uploader) initPrivate() error {
+	cfg := u.cfg
+	allowed := cfg.AllowedVisibilities
+	if allowed == nil {
+		allowed = []Visibility{VisibilityPublic, VisibilityPrivate}
+	}
+	u.allowedVis = make(map[Visibility]bool, len(allowed))
+	for _, v := range allowed {
+		if !v.Valid() {
+			return fmt.Errorf("upload: AllowedVisibilities-д буруу утга: %q", v)
+		}
+		u.allowedVis[v] = true
+	}
+	u.defVis = cfg.DefaultVisibility
+	if u.defVis == "" {
+		u.defVis = VisibilityPublic
+	}
+	if !u.defVis.Valid() || !u.allowedVis[u.defVis] {
+		return fmt.Errorf("upload: DefaultVisibility %q зөвшөөрөгдсөн жагсаалтад алга", u.defVis)
+	}
+
+	u.signer = cfg.Signer
+	u.privPrefix = cfg.PrivatePrefix
+	if u.privPrefix == "" {
+		u.privPrefix = DefaultPrivatePrefix
+		if u.signer != nil {
+			u.privPrefix = u.signer.Prefix()
+		}
+	}
+	pp, err := normalizePrefix(u.privPrefix)
+	if err != nil {
+		return err
+	}
+	u.privPrefix = pp
+	if u.signer != nil && u.signer.Prefix() != u.privPrefix {
+		return fmt.Errorf("upload: PrivatePrefix %q ба Signer угтвар %q зөрж байна", u.privPrefix, u.signer.Prefix())
+	}
+	if cfg.PrivatePrefix == "" && u.signer == nil && overlapPrefix(u.privPrefix, u.prefix) {
+		// Анхдагч угтвар нийтийнхтэй давхцсан (ж: URLPrefix="/files") ⇒ хуучин тохиргоо
+		// эвдэхгүйн тулд өөр анхдагч сонгоно.
+		u.privPrefix = "/private-files"
+	}
+	if u.privPrefix == u.prefix || strings.HasPrefix(u.privPrefix, u.prefix+"/") || strings.HasPrefix(u.prefix, u.privPrefix+"/") {
+		return fmt.Errorf("upload: хувийн URL угтвар %q нийтийн %q-тэй давхцаж/давхарлаж байна", u.privPrefix, u.prefix)
+	}
+	u.privTTL = cfg.PrivateURLTTL
+	if u.privTTL <= 0 {
+		u.privTTL = 5 * time.Minute
+	}
+	if u.signer != nil && u.privTTL > u.signer.MaxTTL() {
+		u.privTTL = u.signer.MaxTTL()
+	}
+
+	if !u.allowedVis[VisibilityPrivate] {
+		return nil
+	}
+	switch {
+	case cfg.PrivateStorage != nil:
+		u.privStorage = cfg.PrivateStorage
+	case cfg.PrivateRoot != "" || (cfg.Storage == nil && cfg.Root != ""):
+		dir := cfg.PrivateRoot
+		if dir == "" {
+			dir = cfg.Root + "/private"
+		}
+		if u.local != nil || cfg.Root != "" {
+			if err := disjointDirs(cfg.Root+u.prefix, dir); err != nil {
+				return err
+			}
+		}
+		ls, err := NewPrivateLocalStorage(dir)
+		if err != nil {
+			return err
+		}
+		u.privLocal, u.privStorage = ls, ls
+	}
+	return nil
+}
+
+func overlapPrefix(a, b string) bool {
+	return a == b || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/")
+}
+
+// disjointDirs — a, b хавтас ижил эсвэл нэг нь нөгөөдөө агуулагдвал алдаа
+// (нийтийн Serve хувийн файлд хүрэх боломжгүй байх ёстой).
+func disjointDirs(a, b string) error {
+	aa, err1 := resolveDir(a)
+	bb, err2 := resolveDir(b)
+	if err1 != nil || err2 != nil {
+		return errors.New("upload: хавтасны зам тодорхойлогдсонгүй")
+	}
+	sep := string(filepath.Separator)
+	if aa == bb || strings.HasPrefix(aa, bb+sep) || strings.HasPrefix(bb, aa+sep) {
+		return fmt.Errorf("upload: нийтийн (%s) ба хувийн (%s) хавтас давхцаж/давхарлаж байна", aa, bb)
+	}
+	return nil
+}
+
+// resolveDir — абсолют зам, байгаа хамгийн урт угтварыг EvalSymlinks-ээр задалж,
+// үлдсэн (одоогоор байхгүй) сегментүүдийг буцааж залгана. Ингэснээр symlink-ээр
+// нэг хавтас руу заасан хоёр зам давхцсан гэж тооцогдоно.
+func resolveDir(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	cur, rest := abs, ""
+	for {
+		if r, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(r, rest), nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return abs, nil
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
 }
 
 // Close — өөрөө үүсгэсэн LocalStorage-ийг хаана.
@@ -201,12 +371,19 @@ func (u *Uploader) Close() error {
 		if u.local != nil {
 			err = u.local.Close()
 		}
+		if u.privLocal != nil {
+			err = errors.Join(err, u.privLocal.Close())
+		}
 	})
 	return err
 }
 
 // Prefix — нийтийн URL-ийн угтвар (ж: "/uploaded"); Serve-ийг `Prefix()+"/*"`-д суулгана.
 func (u *Uploader) Prefix() string { return u.prefix }
+
+// PrivatePrefix — хувийн файлын URL угтвар (ж: "/files/private"); ServePrivate-ийг
+// `PrivatePrefix()+"/*"`-д суулгана.
+func (u *Uploader) PrivatePrefix() string { return u.privPrefix }
 
 func normalizePrefix(p string) (string, error) {
 	if p == "" {
@@ -246,7 +423,47 @@ func (u *Uploader) limit(category string) int64 {
 // Store — нэг файлыг шалгаж хадгална (HTTP-гүй). filename/clientContentType нь
 // клиентийн өгсөн (итгэхгүй) утга; f нь multipart.File. Алдаа нь *Error (клиентийн)
 // эсвэл дотоод алдаа.
+//
+// Харагдах байдал нь Config.DefaultVisibility; Private-д org шаардлагатай тул
+// StoreFile-ийг хэрэглэнэ.
 func (u *Uploader) Store(ctx context.Context, filename, clientContentType string, f File, size int64) (Result, error) {
+	return u.StoreFile(ctx, StoreRequest{Filename: filename, ContentType: clientContentType}, f, size)
+}
+
+// StoreRequest — StoreFile-ийн оролт.
+type StoreRequest struct {
+	Filename    string // клиентийн нэр (итгэхгүй)
+	ContentType string // клиентийн Content-Type (итгэхгүй)
+	// Visibility — хоосон бол Config.DefaultVisibility. Allowlist-д байх ёстой.
+	Visibility Visibility
+	// OrgID — Private-д ЗААВАЛ; JWT-ээс авсан (tenant.OrgID), клиентээс БИШ.
+	OrgID string
+}
+
+// StoreFile — Store ба харагдах байдал/байгууллагатай хувилбар. Private файл
+// `<PrivateRoot>/<org>/<cat>/<yyyy>/<mm>/<name>`-д санамсаргүй нэрээр (LambdaCompat
+// нэрлэлт хэрэглэхгүй) хадгалагдаж, Result.Path нь opaque
+// `private/<org>/...`, Result.URL нь (Signer байвал) богино настай гарын үсэгтэй холбоос.
+func (u *Uploader) StoreFile(ctx context.Context, req StoreRequest, f File, size int64) (Result, error) {
+	vis := req.Visibility
+	if vis == "" {
+		vis = u.defVis
+	}
+	if !vis.Valid() || !u.allowedVis[vis] {
+		return Result{}, badRequest("Харагдах байдал (visibility) буруу")
+	}
+	private := vis == VisibilityPrivate
+	st := u.storage
+	if private {
+		if !orgSegRe.MatchString(req.OrgID) {
+			return Result{}, &Error{fiber.StatusForbidden, "Байгууллага тодорхойгүй"}
+		}
+		if u.privStorage == nil {
+			return Result{}, &Error{fiber.StatusNotImplemented, "Хувийн файл тохируулагдаагүй байна"}
+		}
+		st = u.privStorage
+	}
+	filename, clientContentType := req.Filename, req.ContentType
 	base, ext := splitFileName(filename)
 	cat, ok := u.extCat[ext]
 	if !ok {
@@ -298,17 +515,21 @@ func (u *Uploader) Store(ctx context.Context, filename, clientContentType string
 
 	now := u.now()
 	month := fmt.Sprintf("%02d", int(now.Month()))
-	if u.cfg.LambdaCompat {
+	compat := u.cfg.LambdaCompat && !private
+	if compat {
 		month = now.Month().String()
 	}
-	dir := path.Join(cat, fmt.Sprintf("%d", now.Year()), month)
+	dir := path.Join(cat, fmt.Sprintf("%04d", now.Year()), month)
+	if private {
+		dir = path.Join(req.OrgID, dir)
+	}
 	var name string
 	for i := 0; i < maxNameTrials; i++ {
-		cand := u.candidateName(base, ext, i)
+		cand := u.candidateName(base, ext, i, compat)
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return Result{}, err
 		}
-		err := u.storage.Save(ctx, path.Join(dir, cand), io.NewSectionReader(f, 0, size))
+		err := st.Save(ctx, path.Join(dir, cand), io.NewSectionReader(f, 0, size))
 		if err == nil {
 			name = cand
 			break
@@ -321,17 +542,33 @@ func (u *Uploader) Store(ctx context.Context, filename, clientContentType string
 		return Result{}, errors.New("upload: давхцалгүй нэр олдсонгүй")
 	}
 
-	res := Result{
-		Name: name, Size: size, Type: cat,
-		Path: u.prefix + "/" + path.Join(dir, name),
+	res := Result{Name: name, Size: size, Type: cat}
+	pathOf := func(n string) string { return u.prefix + "/" + path.Join(dir, n) }
+	if private {
+		res.Visibility = VisibilityPrivate
+		pathOf = func(n string) string { return privateDir + "/" + path.Join(dir, n) }
 	}
-	res.URL = u.cfg.BaseURL + res.Path
+	res.Path = pathOf(name)
+	if private {
+		if err := u.fillPrivateURL(&res.URL, &res.ExpiresAt, res.Path); err != nil {
+			// Файл хадгалагдсан (диск дээр үлдэнэ); дуудагч Result.Path-ийг ашиглан дахин sign хийж болно.
+			return res, err
+		}
+	} else {
+		res.URL = u.cfg.BaseURL + res.Path
+	}
 	if u.cfg.Thumbnail.Enabled && (ext == "jpg" || ext == "jpeg" || ext == "png") {
 		thumbName := thumbPrefix + name
-		if err := u.makeThumb(ctx, f, size, ext, path.Join(dir, thumbName)); err != nil {
+		if err := u.makeThumb(ctx, st, f, size, ext, path.Join(dir, thumbName)); err != nil {
 			obs.From(ctx).Warn("upload: thumbnail үүсгэж чадсангүй", "file", res.Path, "error", err)
 		} else {
-			res.Thumb = u.prefix + "/" + path.Join(dir, thumbName)
+			res.Thumb = pathOf(thumbName)
+			if private {
+				var exp int64
+				if err := u.fillPrivateURL(&res.ThumbURL, &exp, res.Thumb); err != nil {
+					return res, err
+				}
+			}
 		}
 	}
 	return res, nil
@@ -351,7 +588,7 @@ func (u *Uploader) rasterExt(head []byte) string {
 	return ext
 }
 
-func (u *Uploader) makeThumb(ctx context.Context, f File, size int64, ext, rel string) error {
+func (u *Uploader) makeThumb(ctx context.Context, st Storage, f File, size int64, ext, rel string) error {
 	select {
 	case u.thumbs <- struct{}{}:
 		defer func() { <-u.thumbs }()
@@ -372,21 +609,49 @@ func (u *Uploader) makeThumb(ctx context.Context, f File, size int64, ext, rel s
 	if err != nil {
 		return err
 	}
-	return u.storage.Save(ctx, rel, &buf)
+	return st.Save(ctx, rel, &buf)
 }
 
-// Handler — `POST` multipart, талбар `file`. Хариу: анхдагч JSON Result;
-// LambdaCompat=true бол plain-text нийтийн зам. Алдаа:
-// `{"error":"..."}` 400/401/413/415/500.
-func (u *Uploader) Handler() fiber.Handler {
+// Handler — `POST` multipart, талбар `file` (+ сонголтоор `visibility`=public|private).
+// Хариу: анхдагч JSON Result; LambdaCompat=true бөгөөд public бол plain-text нийтийн
+// зам. Private үргэлж JSON (замыг шууд татаж болохгүй тул). Private нь нэвтэрсэн
+// principal + JWT-ийн org_id шаардана (AllowAnonymous үед ч); org-г клиентээс авахгүй.
+// Алдаа: `{"error":"..."}` 400/401/403/413/415/500/501.
+func (u *Uploader) Handler() fiber.Handler { return u.handler("") }
+
+// PrivateHandler — Handler, гэхдээ visibility-г ҮРГЭЛЖ Private болгоно (клиентийн
+// `visibility` талбарыг үл тооно). HR/гэрээ зэрэг мэдрэмтгий route-д.
+func (u *Uploader) PrivateHandler() fiber.Handler { return u.handler(VisibilityPrivate) }
+
+func (u *Uploader) handler(forced Visibility) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		if !u.cfg.AllowAnonymous {
-			if _, ok := auth.User(c); !ok {
-				return fail(c, &Error{fiber.StatusUnauthorized, "Зөвшөөрөлгүй"})
-			}
+		_, authed := auth.User(c)
+		if !u.cfg.AllowAnonymous && !authed {
+			return fail(c, &Error{fiber.StatusUnauthorized, "Зөвшөөрөлгүй"})
 		}
 		if cl := int64(c.Request().Header.ContentLength()); cl > u.cfg.MaxBytes+multipartSlackBytes {
 			return fail(c, &Error{fiber.StatusRequestEntityTooLarge, "Файлын хэмжээ хэт их байна"})
+		}
+		vis := forced
+		if vis == "" {
+			vis = Visibility(strings.ToLower(strings.TrimSpace(c.FormValue("visibility"))))
+		}
+		if vis == "" {
+			vis = u.defVis
+		}
+		if !vis.Valid() || !u.allowedVis[vis] {
+			return fail(c, badRequest("Харагдах байдал (visibility) буруу"))
+		}
+		orgID := ""
+		if vis == VisibilityPrivate {
+			if !authed {
+				return fail(c, &Error{fiber.StatusUnauthorized, "Зөвшөөрөлгүй"})
+			}
+			id, err := tenant.OrgID(c)
+			if err != nil {
+				return fail(c, &Error{fiber.StatusForbidden, "Байгууллага тодорхойгүй"})
+			}
+			orgID = id
 		}
 		fh, err := c.FormFile("file")
 		if err != nil {
@@ -403,19 +668,29 @@ func (u *Uploader) Handler() fiber.Handler {
 		defer src.Close()
 
 		log := obs.With(c)
-		res, err := u.Store(c.Context(), fh.Filename, fh.Header.Get(fiber.HeaderContentType), src, fh.Size)
+		res, err := u.StoreFile(c.Context(), StoreRequest{
+			Filename: fh.Filename, ContentType: fh.Header.Get(fiber.HeaderContentType),
+			Visibility: vis, OrgID: orgID,
+		}, src, fh.Size)
 		if err != nil {
 			var ue *Error
 			if errors.As(err, &ue) {
 				log.Info("upload: татгалзсан", "reason", ue.Msg, "status", ue.Status)
 				return fail(c, ue)
 			}
-			log.Error("upload: алдаа", "error", err)
+			if res.Path != "" {
+				log.Error("upload: хадгалсан боловч холбоос гарын үсэглэж чадсангүй", "path", res.Path, "error", err)
+			} else {
+				log.Error("upload: алдаа", "error", err)
+			}
 			return fail(c, &Error{fiber.StatusInternalServerError, "Файл хадгалахад алдаа гарлаа"})
 		}
 		logUploaded(log, res)
 		c.Set(fiber.HeaderXContentTypeOptions, "nosniff")
-		if !u.cfg.LambdaCompat {
+		if res.Visibility == VisibilityPrivate {
+			c.Set(fiber.HeaderCacheControl, "no-store")
+		}
+		if !u.cfg.LambdaCompat || res.Visibility == VisibilityPrivate {
 			return c.JSON(res)
 		}
 		c.Set(fiber.HeaderContentType, "text/plain; charset=utf-8")
@@ -424,7 +699,7 @@ func (u *Uploader) Handler() fiber.Handler {
 }
 
 func logUploaded(log *slog.Logger, r Result) {
-	log.Info("upload: хадгалсан", "path", r.Path, "size", r.Size, "type", r.Type)
+	log.Info("upload: хадгалсан", "path", r.Path, "size", r.Size, "type", r.Type, "visibility", string(r.Visibility))
 }
 
 func fail(c fiber.Ctx, e *Error) error {

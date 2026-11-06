@@ -41,32 +41,56 @@ func ValidRelPath(p string) bool {
 
 // LocalStorage — local дискний Storage. os.Root ашигладаг тул Root-оос гадагш
 // гарах `..` болон symlink-ийг kernel түвшинд (atomic) хориглоно: root доторх
-// symlink зөвхөн root дотор үлдэх үед л дагагдана. Файл 0644, хавтас 0755.
+// symlink зөвхөн root дотор үлдэх үед л дагагдана. Файл 0644, хавтас 0755 (хувийн: 0600/0700).
 type LocalStorage struct {
-	root *os.Root
+	root     *os.Root
+	fileMode os.FileMode
+	dirMode  os.FileMode
+	// beforePublish — зөвхөн тестийн hook: бичиж дууссан, гэхдээ эцсийн нэр
+	// гарахаас өмнөх мөчид дуудагдана.
+	beforePublish func(relPath string)
 }
 
 // NewLocalStorage — dir хавтсыг (байхгүй бол 0755-аар) үүсгэж нээнэ.
 func NewLocalStorage(dir string) (*LocalStorage, error) {
+	return newLocalStorage(dir, 0o644, 0o755)
+}
+
+// NewPrivateLocalStorage — хувийн файлын local Storage: файл 0600, хавтас 0700
+// (зөвхөн аппын процессийн эзэн уншина). Бусад нь NewLocalStorage-тэй ижил.
+func NewPrivateLocalStorage(dir string) (*LocalStorage, error) {
+	return newLocalStorage(dir, 0o600, 0o700)
+}
+
+func newLocalStorage(dir string, fileMode, dirMode os.FileMode) (*LocalStorage, error) {
 	if dir == "" {
 		return nil, errors.New("upload: Root хоосон")
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return nil, fmt.Errorf("upload: хавтас үүсгэж чадсангүй: %w", err)
 	}
 	r, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, fmt.Errorf("upload: root нээж чадсангүй: %w", err)
 	}
-	return &LocalStorage{root: r}, nil
+	return &LocalStorage{root: r, fileMode: fileMode, dirMode: dirMode}, nil
 }
 
 // Close — root handle-ийг хаана.
 func (s *LocalStorage) Close() error { return s.root.Close() }
 
-// Save — Storage.Save. Дараалал: (1) нэрийг O_EXCL-ээр нөөцөлнэ (давхцлыг
-// атомаар илрүүлнэ), (2) агуулгыг ижил хавтсанд түр файлд бичиж fsync хийнэ,
-// (3) түр файлыг нөөцлөсөн нэр дээр rename хийнэ (уншигч хагас файл харахгүй).
+// tmpPrefix — Save-ийн түр файлын нэрийн угтвар. Цэгээр эхэлдэг тул Serve /
+// ServePrivate хэзээ ч үйлчлэхгүй (relFromRequest `.`-эхлэлийг, ServePrivate
+// regexp хориглоно).
+const tmpPrefix = ".khan-tmp-"
+
+// Save — Storage.Save. Эцсийн нэр дээр ЗӨВХӨН бүрэн бичигдсэн файл гарна:
+// (1) агуулгыг ижил хавтсанд нуугдмал түр файлд (`.khan-tmp-*`) бичиж fsync
+// хийнэ, (2) түр файлыг эцсийн нэр рүү os.Link-ээр (no-replace, атомар;
+// байвал fs.ErrExist) холбоод түр нэрийг устгана. Link дэмжигдэхгүй
+// файлын системд (EPERM/ENOTSUP) Lstat + Rename-д буцна (хэт нарийн уралдаан
+// боломжтой: хоёр зэрэгцээ Save нэг нэрийг сонговол сүүлийнх нь дарж болно).
+// Алдаа/цуцлалтад түр файл устана; crash хийвэл зөвхөн нуугдмал `.khan-tmp-*` үлдэнэ.
 func (s *LocalStorage) Save(ctx context.Context, relPath string, r io.Reader) (err error) {
 	if !ValidRelPath(relPath) {
 		return ErrUnsafePath
@@ -75,26 +99,17 @@ func (s *LocalStorage) Save(ctx context.Context, relPath string, r io.Reader) (e
 		return err
 	}
 	if dir := path.Dir(relPath); dir != "." {
-		if err := s.root.MkdirAll(dir, 0o755); err != nil {
+		if err := s.root.MkdirAll(dir, s.dirMode); err != nil {
 			return err
 		}
 	}
-	reserve, err := s.root.OpenFile(relPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-	if err != nil {
-		return err // fs.ErrExist давхцалд
-	}
-	_ = reserve.Close()
-	tmpName := path.Join(path.Dir(relPath), ".tmp-"+randomHex(8))
-	defer func() {
-		if err != nil {
-			_ = s.root.Remove(tmpName)
-			_ = s.root.Remove(relPath)
-		}
-	}()
-	tmp, err := s.root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	tmpName := path.Join(path.Dir(relPath), tmpPrefix+randomHex(8))
+	tmp, err := s.root.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, s.fileMode)
 	if err != nil {
 		return err
 	}
+	// Түр нэр ямагт устана (амжилттай Link-ийн дараа ч — hard link хоёр нэртэй).
+	defer func() { _ = s.root.Remove(tmpName) }()
 	if _, err = io.Copy(tmp, &ctxReader{ctx: ctx, r: r}); err != nil {
 		_ = tmp.Close()
 		return err
@@ -106,7 +121,25 @@ func (s *LocalStorage) Save(ctx context.Context, relPath string, r io.Reader) (e
 	if err = tmp.Close(); err != nil {
 		return err
 	}
-	return s.root.Rename(tmpName, relPath)
+	if s.beforePublish != nil {
+		s.beforePublish(relPath)
+	}
+	return s.publish(tmpName, relPath)
+}
+
+// publish — tmp-г dst нэр дээр дарахгүйгээр гаргана.
+func (s *LocalStorage) publish(tmp, dst string) error {
+	err := s.root.Link(tmp, dst)
+	if err == nil || errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	// Link дэмжигдэхгүй байж болзошгүй: хамгаалалттай fallback.
+	if _, serr := s.root.Lstat(dst); serr == nil {
+		return &fs.PathError{Op: "save", Path: dst, Err: fs.ErrExist}
+	} else if !errors.Is(serr, fs.ErrNotExist) {
+		return err
+	}
+	return s.root.Rename(tmp, dst)
 }
 
 // Open — Storage.Open.

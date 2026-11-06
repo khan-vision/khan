@@ -1,0 +1,211 @@
+// khan gen resource-оор үүсгэсэн НОРООГ (docs/GEN.md): гараар засна — `TODO(khan-gen)` тайлбаруудыг
+// шийдэж, hook нэмээд crudtest.Isolation-аар шалга. Дахин generate хийвэл гар засварыг дарна.
+package finance
+
+import (
+	"github.com/gofiber/fiber/v3"
+	"github.com/khan-vision/khan/crud"
+	"github.com/khan-vision/khan/lookup"
+	"github.com/khan-vision/khan/query"
+	"github.com/khan-vision/khan/validate"
+	"gorm.io/gorm"
+)
+
+// InvoiceResource — Нэхэмжлэх (finance.invoice).
+func InvoiceResource(db func() *gorm.DB, can func(fiber.Ctx, crud.Action) bool) *crud.Resource[map[string]any] {
+	return &crud.Resource[map[string]any]{
+		// TODO(khan-gen) [column-type] tags: массив багана (text) — crud дэмжихгүй — талбар хасагдсан, гараар нэм
+		// TODO(khan-gen) [column-type] shape: дэмжигдээгүй төрөл (geometry) — талбар хасагдсан, гараар нэм
+		// search_vector: generated/identity багана — бичигдэхгүй
+		// TODO(khan-gen) [label] Монгол шошго олдсонгүй (баганын нэр хэвээр): code, class_code, total_amount, rate, quantity, weight, lines_count, big_counter, tiny, is_paid, due_date, posted_at, open_time, meta, notes, currency, status
+		Name:     "finance.invoice",
+		Label:    "Нэхэмжлэх",
+		Endpoint: "/api/finance/invoice",
+		Table:    "finance.invoice",
+		ID:       crud.IDSpec{Kind: crud.IDUUID},
+
+		Fields: []crud.Field{
+			{
+				Name:   "invoice_number",
+				Label:  "Нэхэмжлэхийн дугаар",
+				Kind:   validate.String,
+				Rules:  validate.Rules{Required: true, MaxLen: 40},
+				Unique: true,
+			},
+			// DB-д глобал unique (org-оор хязгаарлагдаагүй) — давхцвал 409
+			{
+				Name:  "code",
+				Label: "code",
+				Kind:  validate.String,
+				Rules: validate.Rules{Nullable: true, MaxLen: 10},
+			},
+			{
+				Name:  "party_id",
+				Label: "Харилцагч",
+				Kind:  validate.UUID,
+				Rules: validate.Rules{Required: true},
+				Ref: &lookup.Spec{
+					Table:      "finance.party",
+					Label:      []string{"name"},
+					SoftDelete: true,
+				},
+			},
+			{
+				Name:  "class_code",
+				Label: "class_code",
+				Kind:  validate.UUID,
+				Rules: validate.Rules{Nullable: true},
+				Ref: &lookup.Spec{
+					Table:  "classification.class",
+					Label:  []string{"name"},
+					Tenant: lookup.TenantOff(),
+				},
+			},
+			{
+				Name:  "total_amount",
+				Label: "total_amount",
+				Kind:  validate.Money,
+			},
+			{
+				Name:  "rate",
+				Label: "rate",
+				Kind:  validate.Number,
+				Rules: validate.Rules{Nullable: true, Scale: 4},
+			},
+			// numeric(10,0) → Int
+			{
+				Name:  "quantity",
+				Label: "quantity",
+				Kind:  validate.Int,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "weight",
+				Label: "weight",
+				Kind:  validate.Number,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "lines_count",
+				Label: "lines_count",
+				Kind:  validate.Int,
+				Rules: validate.Rules{Nullable: true, Min: validate.Bound(-2147483648), Max: validate.Bound(2147483647)},
+			},
+			{
+				Name:  "big_counter",
+				Label: "big_counter",
+				Kind:  validate.Int,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "tiny",
+				Label: "tiny",
+				Kind:  validate.Int,
+				Rules: validate.Rules{Nullable: true, Min: validate.Bound(-32768), Max: validate.Bound(32767)},
+			},
+			{
+				Name:  "is_paid",
+				Label: "is_paid",
+				Kind:  validate.Bool,
+			},
+			{
+				Name:  "due_date",
+				Label: "due_date",
+				Kind:  validate.Date,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "posted_at",
+				Label: "posted_at",
+				Kind:  validate.DateTime,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "open_time",
+				Label: "open_time",
+				Kind:  validate.Time,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "meta",
+				Label: "meta",
+				Kind:  validate.JSON,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "notes",
+				Label: "notes",
+				Kind:  validate.Text,
+				Rules: validate.Rules{Nullable: true},
+			},
+			{
+				Name:  "currency",
+				Label: "currency",
+				Kind:  validate.String,
+				Rules: validate.Rules{MaxLen: 3},
+			},
+			{
+				Name:  "status",
+				Label: "status",
+				Kind:  validate.Enum,
+				Rules: validate.Rules{Enum: []string{"draft", "posted", "void"}},
+			},
+		},
+
+		List: query.Spec{
+			Search: []string{"t.code", "t.invoice_number", "t.notes", "t.currency"},
+			Sort: map[string]string{
+				"big_counter":    "t.big_counter",
+				"class_code":     "t.class_code",
+				"code":           "t.code",
+				"created_at":     "t.created_at",
+				"currency":       "t.currency",
+				"due_date":       "t.due_date",
+				"id":             "t.id",
+				"invoice_number": "t.invoice_number",
+				"is_paid":        "t.is_paid",
+				"lines_count":    "t.lines_count",
+				"notes":          "t.notes",
+				"open_time":      "t.open_time",
+				"party_id":       "t.party_id",
+				"posted_at":      "t.posted_at",
+				"quantity":       "t.quantity",
+				"rate":           "t.rate",
+				"status":         "t.status",
+				"tiny":           "t.tiny",
+				"total_amount":   "t.total_amount",
+				"updated_at":     "t.updated_at",
+				"weight":         "t.weight",
+			},
+			Filters: map[string]query.FilterCol{
+				"big_counter":    query.Number("t.big_counter"),
+				"class_code":     query.UUID("t.class_code"),
+				"code":           query.Text("t.code"),
+				"created_at":     query.Date("t.created_at"),
+				"currency":       query.Text("t.currency"),
+				"due_date":       query.Date("t.due_date"),
+				"invoice_number": query.Text("t.invoice_number"),
+				"is_paid":        query.Bool("t.is_paid"),
+				"lines_count":    query.Number("t.lines_count"),
+				"notes":          query.Text("t.notes"),
+				"party_id":       query.UUID("t.party_id"),
+				"posted_at":      query.Date("t.posted_at"),
+				"quantity":       query.Number("t.quantity"),
+				"rate":           query.Number("t.rate"),
+				"status":         query.Enum("t.status"),
+				"tiny":           query.Number("t.tiny"),
+				"total_amount":   query.Number("t.total_amount"),
+				"updated_at":     query.Date("t.updated_at"),
+				"weight":         query.Number("t.weight"),
+			},
+			DefaultOrder: "t.created_at DESC, t.id DESC",
+		},
+
+		SoftDelete: true,
+		Version:    "version",
+		TrackUser:  true,
+
+		Can: can,
+		DB:  db,
+	}
+}

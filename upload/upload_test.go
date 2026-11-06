@@ -523,10 +523,10 @@ func TestStoredFilePermissions(t *testing.T) {
 	if dst.Mode().Perm()&0o022 != 0 || dst.Mode().Perm()&0o755 != 0o755 {
 		t.Fatalf("dir mode=%v", dst.Mode())
 	}
-	// .tmp- файл үлдээгүй.
+	// .khan-tmp- файл үлдээгүй.
 	ents, _ := os.ReadDir(filepath.Dir(p))
 	for _, e := range ents {
-		if strings.HasPrefix(e.Name(), ".tmp-") {
+		if strings.HasPrefix(e.Name(), tmpPrefix) {
 			t.Fatalf("түр файл үлдсэн: %s", e.Name())
 		}
 	}

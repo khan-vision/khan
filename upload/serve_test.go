@@ -90,7 +90,7 @@ func TestServePathTraversal(t *testing.T) {
 	putFile(t, u, "images/.hidden.png", pngBytes(t, 2, 2))
 	putFile(t, u, "other/x.txt", []byte("not a category"))
 	putFile(t, u, "sharedlib/lib.so", []byte("\x7fELF"))
-	putFile(t, u, "images/2026/November/.tmp-abc", []byte("partial"))
+	putFile(t, u, "images/2026/November/.khan-tmp-abc", []byte("partial"))
 
 	paths := []string{
 		"/uploaded/../secret.txt",
@@ -111,7 +111,7 @@ func TestServePathTraversal(t *testing.T) {
 		"/uploaded/images",
 		"/uploaded/",
 		"/uploaded/images/.hidden.png",
-		"/uploaded/images/2026/November/.tmp-abc",
+		"/uploaded/images/2026/November/.khan-tmp-abc",
 		"/uploaded/other/x.txt",
 		"/uploaded/sharedlib/lib.so",
 		"/uploaded/images/%252e%252e/secret.txt",
