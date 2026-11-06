@@ -102,7 +102,7 @@ func (g *tsGen) plan(metas []crud.Meta) error {
 		r := tsRes{meta: m, pascal: pascal, camel: lowerFirst(pascal)}
 		ids := []string{pascal + "Payload", pascal + "UpdatePayload", pascal + "Row",
 			r.camel + "Schema", r.camel + "UpdateSchema", r.camel + "Fields", r.camel + "Endpoint",
-			r.camel + "Filterable", r.camel + "Defaults"}
+			r.camel + "Filterable", r.camel + "Defaults", r.camel + "Scope"}
 		for _, id := range ids {
 			if err := claim(id, m.Name); err != nil {
 				return err
@@ -276,6 +276,10 @@ func (g *tsGen) writeResource(b *strings.Builder, r tsRes) error {
 	m := r.meta
 	fmt.Fprintf(b, "// ---- %s (%s) ----\n\n", docText(m.Name), docText(m.Label))
 	fmt.Fprintf(b, "/** %s: REST суурь. */\nexport const %sEndpoint = %s\n\n", docText(m.Label), r.camel, jsStr(m.Endpoint))
+	if note := scopeNote(m); note != "" {
+		fmt.Fprintf(b, "/** %s */\n", note)
+		fmt.Fprintf(b, "export const %sScope = %s as const\n\n", r.camel, jsStr(m.Scope))
+	}
 
 	// Payload / Row interface-ууд (child эхэлж)
 	for _, c := range r.children {
@@ -771,4 +775,27 @@ func childIDColumn(c crud.ChildMeta) string {
 		return c.ID.Column
 	}
 	return "id"
+}
+
+// scopeNote — tenant биш resource-ийн scope тайлбар (TS comment, OpenAPI description). tenant → "".
+func scopeNote(m crud.Meta) string {
+	switch m.Scope {
+	case "shared":
+		n := "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org."
+		if m.SystemWrites {
+			n += " Системийн мөрийг зөвхөн SystemCan эрхтэй `POST " + m.Endpoint + "/system`, PUT, DELETE-ээр удирдана."
+		} else {
+			n += " Системийн мөр засах/устгах боломжгүй (403)."
+		}
+		return docText(n)
+	case "global":
+		n := "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл."
+		if m.GlobalWrites {
+			n += " Бичилт бүх байгууллагад нөлөөлнө (sysadmin эрх)."
+		} else {
+			n += " Унших-л."
+		}
+		return docText(n)
+	}
+	return ""
 }

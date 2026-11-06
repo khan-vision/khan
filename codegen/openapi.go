@@ -426,6 +426,10 @@ func okResp(desc string, schema any) obj {
 }
 
 func (g *oaGen) addPaths(paths obj) {
+	existing := make(map[string]bool, len(paths))
+	for k := range paths {
+		existing[k] = true
+	}
 	m, p := g.m, g.pascal
 	base := m.Endpoint
 	tag := []any{m.Label}
@@ -544,6 +548,41 @@ func (g *oaGen) addPaths(paths obj) {
 			"responses":   merge(obj{"200": okResp("Засагдсан мөр", ref(p))}, errs("400", "401", "403", "404", "409", "422", "500"))},
 		"delete": obj{"operationId": opID("delete"), "summary": m.Label + " — устгах", "tags": tag, "parameters": idParam,
 			"responses": merge(obj{"200": okResp("Устсан id", ref("DeleteResult"))}, errs("400", "401", "403", "404", "409", "500"))},
+	}
+	g.annotateScope(paths, existing)
+	if m.Scope == "shared" && m.SystemWrites {
+		paths[base+"/system"] = obj{
+			"post": obj{"operationId": opID("createSystem"), "summary": m.Label + " — системийн мөр үүсгэх", "tags": tag,
+				"description":  "Scope=shared: org_id NULL (бүх байгууллагад харагдах) мөр. Can ба SystemCan хоёулаа шаардлагатай.",
+				"x-khan-scope": "shared",
+				"requestBody":  obj{"required": true, "content": jsonContent(ref(p + "Create"))},
+				"responses":    merge(obj{"201": okResp("Үүссэн системийн мөр", ref(p))}, errs("400", "401", "403", "409", "422", "500"))},
+		}
+	}
+}
+
+// annotateScope — tenant биш resource-ийн бүх operation-д scope тайлбар + `x-khan-scope` нэмнэ.
+func (g *oaGen) annotateScope(paths obj, existing map[string]bool) {
+	note := scopeNote(g.m)
+	if note == "" {
+		return
+	}
+	for path, item := range paths {
+		if existing[path] { // өөр resource-ийн path
+			continue
+		}
+		for _, op := range item.(obj) {
+			o, ok := op.(obj)
+			if !ok {
+				continue
+			}
+			if d, has := o["description"].(string); has && d != "" {
+				o["description"] = d + " " + note
+			} else {
+				o["description"] = note
+			}
+			o["x-khan-scope"] = g.m.Scope
+		}
 	}
 }
 

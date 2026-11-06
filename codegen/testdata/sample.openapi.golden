@@ -753,6 +753,127 @@
         ],
         "type": "object"
       },
+      "Country": {
+        "additionalProperties": true,
+        "description": "Улс — дэлгэрэнгүй мөр",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Нэр",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "org_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "CountryCreate": {
+        "description": "Улс — үүсгэх хүсэлт",
+        "properties": {
+          "name": {
+            "description": "Нэр",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "CountryList": {
+        "properties": {
+          "can": {
+            "$ref": "#/components/schemas/Can"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Жагсаалтын мөр (resource-ийн ListQuery-ийн SELECT-ээр тодорхойлогдоно)",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "filterable": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totals": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "data",
+          "total"
+        ],
+        "type": "object"
+      },
+      "CountryUpdate": {
+        "description": "Улс — засах хүсэлт (хэсэгчилсэн)",
+        "properties": {
+          "name": {
+            "description": "Нэр",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "DeleteResult": {
         "properties": {
           "deleted": {
@@ -853,6 +974,127 @@
         "required": [
           "data"
         ],
+        "type": "object"
+      },
+      "RequestKind": {
+        "additionalProperties": true,
+        "description": "Хүсэлтийн төрөл — дэлгэрэнгүй мөр",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "description": "Нэр",
+            "maxLength": 100,
+            "type": "string"
+          },
+          "org_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "RequestKindCreate": {
+        "description": "Хүсэлтийн төрөл — үүсгэх хүсэлт",
+        "properties": {
+          "name": {
+            "description": "Нэр",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "RequestKindList": {
+        "properties": {
+          "can": {
+            "$ref": "#/components/schemas/Can"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Жагсаалтын мөр (resource-ийн ListQuery-ийн SELECT-ээр тодорхойлогдоно)",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "filterable": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totals": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "data",
+          "total"
+        ],
+        "type": "object"
+      },
+      "RequestKindUpdate": {
+        "description": "Хүсэлтийн төрөл — засах хүсэлт (хэсэгчилсэн)",
+        "properties": {
+          "name": {
+            "description": "Нэр",
+            "maxLength": 100,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Tag": {
@@ -1017,6 +1259,424 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/attendance/request-kinds": {
+      "get": {
+        "description": "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "listRequestKind",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "listquery шүүлт (JSON мөр)",
+            "in": "query",
+            "name": "filters",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestKindList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — жагсаалт",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      },
+      "post": {
+        "description": "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "createRequestKind",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestKindCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestKind"
+                }
+              }
+            },
+            "description": "Үүссэн мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — үүсгэх",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      }
+    },
+    "/api/attendance/request-kinds/meta": {
+      "get": {
+        "description": "ExposeMeta: true үед л mount хийгдэнэ. Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "metaRequestKind",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "crud.Meta + can"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — meta",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      }
+    },
+    "/api/attendance/request-kinds/query": {
+      "post": {
+        "description": "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "queryRequestKind",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestKindList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — жагсаалт (JSON body)",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      }
+    },
+    "/api/attendance/request-kinds/system": {
+      "post": {
+        "description": "Scope=shared: org_id NULL (бүх байгууллагад харагдах) мөр. Can ба SystemCan хоёулаа шаардлагатай.",
+        "operationId": "createSystemRequestKind",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestKindCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestKind"
+                }
+              }
+            },
+            "description": "Үүссэн системийн мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — системийн мөр үүсгэх",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      }
+    },
+    "/api/attendance/request-kinds/{id}": {
+      "delete": {
+        "description": "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "deleteRequestKind",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResult"
+                }
+              }
+            },
+            "description": "Устсан id"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — устгах",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      },
+      "get": {
+        "description": "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "getRequestKind",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestKind"
+                }
+              }
+            },
+            "description": "Мөр + children"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — дэлгэрэнгүй",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      },
+      "put": {
+        "description": "Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана.",
+        "operationId": "updateRequestKind",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestKindUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestKind"
+                }
+              }
+            },
+            "description": "Засагдсан мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хүсэлтийн төрөл — засах",
+        "tags": [
+          "Хүсэлтийн төрөл"
+        ],
+        "x-khan-scope": "shared"
+      }
+    },
     "/api/organization/conference/rooms": {
       "get": {
         "operationId": "listConferenceRoom",
@@ -1999,6 +2659,373 @@
         "tags": [
           "Шошго"
         ]
+      }
+    },
+    "/api/platform/countries": {
+      "get": {
+        "description": "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "listCountry",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "listquery шүүлт (JSON мөр)",
+            "in": "query",
+            "name": "filters",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountryList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — жагсаалт",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
+      },
+      "post": {
+        "description": "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "createCountry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Country"
+                }
+              }
+            },
+            "description": "Үүссэн мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — үүсгэх",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
+      }
+    },
+    "/api/platform/countries/meta": {
+      "get": {
+        "description": "ExposeMeta: true үед л mount хийгдэнэ. Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "metaCountry",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "crud.Meta + can"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — meta",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
+      }
+    },
+    "/api/platform/countries/query": {
+      "post": {
+        "description": "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "queryCountry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CountryList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — жагсаалт (JSON body)",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
+      }
+    },
+    "/api/platform/countries/{id}": {
+      "delete": {
+        "description": "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "deleteCountry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResult"
+                }
+              }
+            },
+            "description": "Устсан id"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — устгах",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
+      },
+      "get": {
+        "description": "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "getCountry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Country"
+                }
+              }
+            },
+            "description": "Мөр + children"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — дэлгэрэнгүй",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
+      },
+      "put": {
+        "description": "Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л.",
+        "operationId": "updateCountry",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CountryUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Country"
+                }
+              }
+            },
+            "description": "Засагдсан мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Улс — засах",
+        "tags": [
+          "Улс"
+        ],
+        "x-khan-scope": "global"
       }
     }
   },

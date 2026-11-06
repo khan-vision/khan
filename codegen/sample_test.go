@@ -65,7 +65,19 @@ func sampleMetas() []crud.Meta {
 		Fields:     []crud.FieldMeta{{Name: "label", Label: "Нэр", Kind: validate.String, Required: true, MaxLen: 255}},
 		Filterable: map[string]query.FilterKind{},
 	}
-	return []crud.Meta{tag, room} // зориуд эрэмбэгүй
+	kind := crud.Meta{
+		Name: "attendance.request_kind", Label: "Хүсэлтийн төрөл", Endpoint: "/api/attendance/request-kinds", Table: "attendance.lut_attendance_request",
+		ID: crud.IDMeta{Column: "id", Kind: crud.IDUUID}, Scope: "shared", SystemWrites: true,
+		Fields:     []crud.FieldMeta{{Name: "name", Label: "Нэр", Kind: validate.String, Required: true, MaxLen: 100}},
+		Filterable: map[string]query.FilterKind{},
+	}
+	country := crud.Meta{
+		Name: "platform.country", Label: "Улс", Endpoint: "/api/platform/countries", Table: "platform.country",
+		ID: crud.IDMeta{Column: "id", Kind: crud.IDUUID}, Scope: "global",
+		Fields:     []crud.FieldMeta{{Name: "name", Label: "Нэр", Kind: validate.String, Required: true, MaxLen: 100}},
+		Filterable: map[string]query.FilterKind{},
+	}
+	return []crud.Meta{tag, room, kind, country} // зориуд эрэмбэгүй
 }
 
 func checkGolden(t *testing.T, name string, got []byte) {

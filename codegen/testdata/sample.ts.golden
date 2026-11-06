@@ -47,6 +47,61 @@ function khanDecimal(label: string, scale: number, min?: number, max?: number) {
   })
 }
 
+// ---- attendance.request_kind (Хүсэлтийн төрөл) ----
+
+/** Хүсэлтийн төрөл: REST суурь. */
+export const requestKindEndpoint = "/api/attendance/request-kinds"
+
+/** Scope=shared: org_id NULL мөр = бүх байгууллагад харагдах СИСТЕМИЙН мөр (унших-л; `org_id` null). Create үргэлж өөрийн org. Системийн мөрийг зөвхөн SystemCan эрхтэй `POST /api/attendance/request-kinds/system`, PUT, DELETE-ээр удирдана. */
+export const requestKindScope = "shared" as const
+
+/** Хүсэлтийн төрөл — үүсгэх хүсэлт. */
+export interface RequestKindPayload {
+  /** Нэр */
+  name: string
+}
+
+/** Хүсэлтийн төрөл — засах хүсэлт (хэсэгчилсэн). */
+export type RequestKindUpdatePayload = Partial<RequestKindPayload>
+
+/** Хүсэлтийн төрөл — дэлгэрэнгүй мөр (хариу). Money/Number нь JSON тоо; Password хариунд байхгүй. */
+export interface RequestKindRow {
+  id: string
+  org_id?: string
+  /** Нэр */
+  name: string
+  created_at?: string | null
+  updated_at?: string | null
+  deleted_at?: string | null
+  created_by?: string | null
+  updated_by?: string | null
+}
+
+export const requestKindSchema = z.object({
+  name: z.string().min(1, "Нэр заавал").max(100, "Нэр: хамгийн ихдээ 100 тэмдэгт"),
+})
+
+export const requestKindUpdateSchema = requestKindSchema.partial()
+
+/** KvForm талбарууд (KvFieldDef[]). */
+export const requestKindFields: KvFieldDef[] = [
+  {
+    name: "name",
+    label: "Нэр",
+    type: "text",
+    required: true,
+    rules: [
+      { max: 100, message: "Нэр: хамгийн ихдээ 100 тэмдэгт" },
+    ],
+  },
+]
+
+/** Жагсаалтын шүүлтийн түлхүүр → төрөл (listquery). */
+export const requestKindFilterable = {} as const
+
+/** Шинэ бичлэгийн анхны утга (Field.Default). */
+export const requestKindDefaults: Partial<RequestKindPayload> = {}
+
 // ---- organization.conference_room (Хурлын өрөө) ----
 
 /** Хурлын өрөө: REST суурь. */
@@ -432,4 +487,59 @@ export const tagFilterable = {} as const
 
 /** Шинэ бичлэгийн анхны утга (Field.Default). */
 export const tagDefaults: Partial<TagPayload> = {}
+
+// ---- platform.country (Улс) ----
+
+/** Улс: REST суурь. */
+export const countryEndpoint = "/api/platform/countries"
+
+/** Scope=global: org_id-гүй платформын хүснэгт, бүх байгууллагад ижил өгөгдөл. Унших-л. */
+export const countryScope = "global" as const
+
+/** Улс — үүсгэх хүсэлт. */
+export interface CountryPayload {
+  /** Нэр */
+  name: string
+}
+
+/** Улс — засах хүсэлт (хэсэгчилсэн). */
+export type CountryUpdatePayload = Partial<CountryPayload>
+
+/** Улс — дэлгэрэнгүй мөр (хариу). Money/Number нь JSON тоо; Password хариунд байхгүй. */
+export interface CountryRow {
+  id: string
+  org_id?: string
+  /** Нэр */
+  name: string
+  created_at?: string | null
+  updated_at?: string | null
+  deleted_at?: string | null
+  created_by?: string | null
+  updated_by?: string | null
+}
+
+export const countrySchema = z.object({
+  name: z.string().min(1, "Нэр заавал").max(100, "Нэр: хамгийн ихдээ 100 тэмдэгт"),
+})
+
+export const countryUpdateSchema = countrySchema.partial()
+
+/** KvForm талбарууд (KvFieldDef[]). */
+export const countryFields: KvFieldDef[] = [
+  {
+    name: "name",
+    label: "Нэр",
+    type: "text",
+    required: true,
+    rules: [
+      { max: 100, message: "Нэр: хамгийн ихдээ 100 тэмдэгт" },
+    ],
+  },
+]
+
+/** Жагсаалтын шүүлтийн түлхүүр → төрөл (listquery). */
+export const countryFilterable = {} as const
+
+/** Шинэ бичлэгийн анхны утга (Field.Default). */
+export const countryDefaults: Partial<CountryPayload> = {}
 
