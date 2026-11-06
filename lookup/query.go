@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/khan-vision/khan/tenant"
 	"github.com/khan-vision/khan/validate"
 	"gorm.io/gorm"
 )
@@ -42,7 +43,10 @@ func (s Spec) scoped(db *gorm.DB, orgID string) (*gorm.DB, error) {
 		return nil, err
 	}
 	q := db.Table(s.Table)
-	if s.tenant() {
+	switch {
+	case s.tenant() && s.Shared:
+		q = q.Where(tenant.SharedCond(""), orgID)
+	case s.tenant():
 		q = q.Where("org_id = ?", orgID)
 	}
 	if s.SoftDelete {

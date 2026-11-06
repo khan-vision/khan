@@ -43,6 +43,11 @@ type Spec struct {
 	Parent string   // optional parent багана → parent_value, `?parent=`
 	Where  string   // тогтмол нөхцөл (параметргүй; Validate-д grammar-аар шалгагдана; ж: "status = 'active'")
 	Tenant *bool    // nil=true: org_id = ? нөхцөл
+	// Shared — hybrid хүснэгт (org_id NULLABLE; NULL = бүх байгууллагад харагдах системийн мөр):
+	// нөхцөл нь `org_id = ? OR org_id IS NULL` болж, сонголт/Exists системийн мөрийг ч оруулна.
+	// Бусад org-ийн мөр хэзээ ч орохгүй. Tenant: TenantOff()-тэй хамт хэрэглэж БОЛОХГҮЙ (Validate алдаа).
+	// crud.ScopeShared resource руу заасан Ref-д заавал тавина.
+	Shared bool
 	// SoftDelete — deleted_at IS NULL.
 	SoftDelete bool
 	Order      string // "col [asc|desc], ..."; хоосон бол Label[0]
@@ -99,6 +104,9 @@ func (s Spec) Validate() error {
 				return fmt.Errorf("khan/lookup: %s багана буруу: %q", group.name, c)
 			}
 		}
+	}
+	if s.Shared && !s.tenant() {
+		return errors.New("khan/lookup: Shared нь Tenant: TenantOff()-тэй зөрчилдөнө (Shared = org эсвэл системийн мөр)")
 	}
 	if s.Parent != "" && !identRe.MatchString(s.Parent) {
 		return fmt.Errorf("khan/lookup: Parent буруу: %q", s.Parent)
