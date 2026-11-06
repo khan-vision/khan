@@ -66,6 +66,10 @@ type BulkSpec struct {
 	MaxIDs int
 	// IntIDs — id бүхэл тоо; false бол UUID шаардана.
 	IntIDs bool
+	// NoOrg — хүснэгтэд org_id багана БАЙХГҮЙ (global/platform хүснэгт): `<OrgCol> = ?` нөхцөл
+	// нэмэхгүй. ЗӨВХӨН crud.ScopeGlobal тавина (эрхийг crud-ийн Can/GlobalWrites хаалга шалгана);
+	// tenant хүснэгтэд тавьсан бол бүх org-ийн мөр нөлөөлнө — тиймээс ил тод нэртэй.
+	NoOrg bool
 }
 
 // BulkRequest — шалгагдсан bulk хүсэлт.
@@ -337,9 +341,11 @@ func BulkQuery(db *gorm.DB, orgID string, req BulkRequest, spec BulkSpec) *gorm.
 		}
 		ids = n
 	}
-	q := db.Table(spec.Table).
-		Where(spec.orgCol()+" = ?", orgID).
-		Where(spec.idCol()+" IN ?", ids)
+	q := db.Table(spec.Table)
+	if !spec.NoOrg {
+		q = q.Where(spec.orgCol()+" = ?", orgID)
+	}
+	q = q.Where(spec.idCol()+" IN ?", ids)
 	if spec.SoftDelete {
 		q = q.Where("deleted_at IS NULL")
 	}
