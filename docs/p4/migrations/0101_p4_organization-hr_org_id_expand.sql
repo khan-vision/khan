@@ -22,3 +22,69 @@ ALTER TABLE public.sub_employee_education ADD CONSTRAINT sub_employee_education_
 
 ALTER TABLE public.sub_employee_job_experience ADD COLUMN IF NOT EXISTS org_id uuid;
 ALTER TABLE public.sub_employee_job_experience ADD CONSTRAINT sub_employee_job_experience_org_id_nn CHECK (org_id IS NOT NULL) NOT VALID;
+
+-- Хуучин апп org_id бичдэггүй тул NOT VALID CHECK нь INSERT-ийг шууд эвдэнэ. BEFORE INSERT trigger эцэг хүснэгтээс org_id-г автоматаар дүүргэнэ
+-- (эцэг олдохгүй бол NULL хэвээр -> CHECK унана = orphan insert татгалзана). Апп org_id бичдэг болсны дараа trigger-ийг хасаж болно.
+CREATE OR REPLACE FUNCTION organization.p4_employee_extra_phones_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.emp_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_employee_extra_phones_org_id_derive ON organization.employee_extra_phones;
+CREATE TRIGGER p4_employee_extra_phones_org_id_derive BEFORE INSERT ON organization.employee_extra_phones FOR EACH ROW EXECUTE FUNCTION organization.p4_employee_extra_phones_org_id_derive();
+CREATE OR REPLACE FUNCTION organization.p4_employee_extra_emails_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.emp_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_employee_extra_emails_org_id_derive ON organization.employee_extra_emails;
+CREATE TRIGGER p4_employee_extra_emails_org_id_derive BEFORE INSERT ON organization.employee_extra_emails FOR EACH ROW EXECUTE FUNCTION organization.p4_employee_extra_emails_org_id_derive();
+CREATE OR REPLACE FUNCTION organization.p4_employee_extra_shifts_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.emp_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_employee_extra_shifts_org_id_derive ON organization.employee_extra_shifts;
+CREATE TRIGGER p4_employee_extra_shifts_org_id_derive BEFORE INSERT ON organization.employee_extra_shifts FOR EACH ROW EXECUTE FUNCTION organization.p4_employee_extra_shifts_org_id_derive();
+CREATE OR REPLACE FUNCTION public.p4_sub_employee_skill_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.employee_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_sub_employee_skill_org_id_derive ON public.sub_employee_skill;
+CREATE TRIGGER p4_sub_employee_skill_org_id_derive BEFORE INSERT ON public.sub_employee_skill FOR EACH ROW EXECUTE FUNCTION public.p4_sub_employee_skill_org_id_derive();
+CREATE OR REPLACE FUNCTION public.p4_sub_employee_course_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.employee_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_sub_employee_course_org_id_derive ON public.sub_employee_course;
+CREATE TRIGGER p4_sub_employee_course_org_id_derive BEFORE INSERT ON public.sub_employee_course FOR EACH ROW EXECUTE FUNCTION public.p4_sub_employee_course_org_id_derive();
+CREATE OR REPLACE FUNCTION public.p4_sub_employee_education_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.employee_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_sub_employee_education_org_id_derive ON public.sub_employee_education;
+CREATE TRIGGER p4_sub_employee_education_org_id_derive BEFORE INSERT ON public.sub_employee_education FOR EACH ROW EXECUTE FUNCTION public.p4_sub_employee_education_org_id_derive();
+CREATE OR REPLACE FUNCTION public.p4_sub_employee_job_experience_org_id_derive() RETURNS trigger LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.org_id IS NULL THEN
+    SELECT p.org_id INTO NEW.org_id FROM organization.employee p WHERE p.id = NEW.employee_id;
+  END IF;
+  RETURN NEW;
+END $fn$;
+DROP TRIGGER IF EXISTS p4_sub_employee_job_experience_org_id_derive ON public.sub_employee_job_experience;
+CREATE TRIGGER p4_sub_employee_job_experience_org_id_derive BEFORE INSERT ON public.sub_employee_job_experience FOR EACH ROW EXECUTE FUNCTION public.p4_sub_employee_job_experience_org_id_derive();

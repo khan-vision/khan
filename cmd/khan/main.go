@@ -9,6 +9,7 @@
 //	khan gen audit -forms DIR [-models DIR] [-grids DIR] [-catalog catalog.json | -env .env] [-force] [-v]
 //	khan migrate status -dir DIR [-env .env] [-table khan.schema_migrations]
 //	khan migrate up -dir DIR [-env .env] [-lock-timeout 5s] [-statement-timeout 15m] [-dry-run] [-lint-schema a,b]
+//	khan parity corpus -frontend DIR [-o corpus.jsonl] ...  /  khan parity run -a URL -b URL -corpus C.jsonl ...
 //
 // `schema` команд DB-ээс ЗӨВХӨН уншина (pg_catalog SELECT). `migrate up` нь DB-д бичнэ
 // (-dry-run нь зөвхөн pending жагсаана).
@@ -47,6 +48,9 @@ const usage = `khan — Khan library CLI
   khan migrate status -dir DIR [-env FILE] [-table NAME] [-allow-missing]
   khan migrate up -dir DIR [-env FILE] [-table NAME] [-lock-timeout 5s] [-statement-timeout 15m]
                   [-allow-missing] [-dry-run] [-lint-schema a,b]
+  khan parity corpus -frontend DIR [-o corpus.jsonl] [-params P.json] [-merge a.jsonl,b.jsonl] [-auth PROFILE]
+  khan parity run -a URL -b URL -corpus C.jsonl [-profiles P.json] [-ignore I.json] [-expect E.json]
+                  [-allow-mutations] [-allow-remote] [-o DIR]   (A/B behaviour parity; docs/PARITY.md)
 `
 
 func main() {
@@ -57,9 +61,12 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) < 2 || (args[0] != "schema" && args[0] != "migrate" && args[0] != "gen") {
+	if len(args) < 2 || (args[0] != "schema" && args[0] != "migrate" && args[0] != "gen" && args[0] != "parity") {
 		fmt.Fprint(stderr, usage)
 		return fmt.Errorf("команд буруу")
+	}
+	if args[0] == "parity" {
+		return parityCmd(args[1:], stdout, stderr)
 	}
 	if args[0] == "gen" {
 		return genCmd(args[1:], stdout, stderr)
