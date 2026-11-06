@@ -1,0 +1,8 @@
+/khan
+*.test
+*.out
+coverage.*
+.env
+.env.*
+!.env.example
+catalog.json
