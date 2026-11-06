@@ -86,8 +86,12 @@ func TestMountConfigErrors(t *testing.T) {
 		"child bad table":        func(r *Resource[map[string]any]) { c := childOK("lines"); c.Table = "lines"; r.Children = []Child{c} },
 		"child bad fk":           func(r *Resource[map[string]any]) { c := childOK("lines"); c.FK = "x y"; r.Children = []Child{c} },
 		"child no fields":        func(r *Resource[map[string]any]) { c := childOK("lines"); c.Fields = nil; r.Children = []Child{c} },
-		"child int id generate":  func(r *Resource[map[string]any]) { c := childOK("lines"); c.ID = IDSpec{Kind: IDInt, Generate: newUUID}; r.Children = []Child{c} },
-		"child bad order":        func(r *Resource[map[string]any]) { c := childOK("lines"); c.Order = "a desc"; r.Children = []Child{c} },
+		"child int id generate": func(r *Resource[map[string]any]) {
+			c := childOK("lines")
+			c.ID = IDSpec{Kind: IDInt, Generate: newUUID}
+			r.Children = []Child{c}
+		},
+		"child bad order": func(r *Resource[map[string]any]) { c := childOK("lines"); c.Order = "a desc"; r.Children = []Child{c} },
 		"child unique": func(r *Resource[map[string]any]) {
 			c := childOK("lines")
 			c.Fields[0].Unique = true
