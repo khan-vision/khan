@@ -53,6 +53,10 @@ func sampleMetas() []crud.Meta {
 				{Name: "qty", Label: "Тоо", Kind: validate.Int, Required: true, Min: f64(1)},
 				{Name: "unit_price", Label: "Нэгж үнэ", Kind: validate.Money, Required: true},
 			},
+		}, {
+			// legacy subform: бүхэл тоон (bigserial) id
+			Name: "contacts", Label: "Холбоо барих", MaxRows: 10, ID: crud.IDMeta{Column: "row_id", Kind: crud.IDInt},
+			Fields: []crud.FieldMeta{{Name: "phone", Label: "Утас", Kind: validate.Phone, Required: true}},
 		}},
 		Filterable: map[string]query.FilterKind{"room_name": query.KindText, "status": query.KindEnum, "capacity": query.KindNumber},
 		Sort:       []string{"capacity", "room_name"},

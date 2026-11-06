@@ -162,7 +162,8 @@ type Child struct {
 // DB-д байгаа боловч массивт ороогүй → delete (SoftDelete бол deleted_at). Массив body-д огт байхгүй (key алга ЭСВЭЛ null)
 // бол children өөрчлөгдөхгүй; `[]` бол бүгдийг устгана. Create-д мөрийн id үл тооно. Эцгийг hard delete хийхэд
 // бүх child мөр (soft эсэхээс үл хамааран) эхлээд устна; soft delete-д child хөндөгдөхгүй.
-// Хязгаарлалт: child ID зөвхөн UUID; child талбарт `Unique` дэмжигдэхгүй (Mount алдаа); nested children байхгүй.
+// Child id: `Child.ID IDSpec` — IDUUID (анхдагч) эсвэл IDInt (serial/identity, DB өгнө; payload-д эерэг int64 тоо эсвэл цифртэй мөр,
+// хариунд JSON тоо; PK-гүй хүснэгт дэмжигдэхгүй). Хязгаарлалт: child талбарт `Unique` дэмжигдэхгүй (Mount алдаа); nested children байхгүй.
 
 type Ctx struct {
     Fiber    fiber.Ctx
@@ -361,7 +362,7 @@ DateTime→datetime, Time→time, Enum→select (`options`), Phone→phone, Pass
 дутуу түлхүүрийг шалгадаггүй), `meta: unknown`.
 
 Мэдэгдэж буй хязгаар: Go (RE2) pattern-ийг JS RegExp болгоно (`(?i)` flag, `(?P<` хөрвүүлнэ; `\A \z \Q \C [[:class:]]` → алдаа);
-`Ref.Parent` (cascade) нь `KvFieldDef`-д илэрхийлэгдэхгүй; child `id` багана `"id"` гэж үзнэ (`ChildMeta` нэр өгдөггүй).
+`Ref.Parent` (cascade) нь `KvFieldDef`-д илэрхийлэгдэхгүй; child id-ийн багана/төрөл `ChildMeta.ID`-аас (IDInt → `number`/zod `int().positive()`/OpenAPI `integer`).
 
 **OpenAPI 3.1:** resource бүрийн route бүр (`GET|POST <ep>`, `POST /query`, `GET /export.xlsx` (Export), `POST /bulk` (Bulk),
 `GET /options/{field}` (Ref байвал; `field` enum), `GET|PUT|DELETE /{id}`, `GET /meta` — `Info.MetaRoutes`), schema (`<P>`, `<P>Create`,
@@ -403,7 +404,7 @@ Cleanup: үүсгэсэн мөрийг API-аар (DELETE) устгана (best 
 | 5 | `lookup.Spec.Kind`, `Spec.Validate()`, `ValidateWhere`, `TenantOff()`; `Search` nil үед Label-ийн нэгдсэн мөрөөр хайна | uuid/int баганад буруу утга DB алдаа (500) болохоос сэргийлэх; "Овог Нэр" хайлт |
 | 6 | `validate.Parse`-ийн present/хоосон утгын дүрэм тодорхой болсон (§4); `Min/Max` decimal-аар харьцуулна; `Bound`, `NewErrors/Merge/Len` | Спек "present"-ийг тодорхойлоогүй байсан; float харьцуулалт `0.1`-д алдаатай |
 | 7 | Money/Number-ийг хариунд яг цифртэй JSON тоо болгож буцаана (supplemental `CAST(col AS text)` уншилт) | pgx numeric-г float64 болгодог — 9999999999999999.99 нь 1e16 болж алдагддаг байсан |
-| 8 | Child алдааны түлхүүр `lines.0.qty`; child null → өөрчлөхгүй; child `Unique` дэмжигдэхгүй; child ID зөвхөн UUID | UForm нэршил; null-ээр санамсаргүй бүгдийг устгахаас сэргийлэх; unique-ийн хүрээ тодорхойгүй |
+| 8 | Child алдааны түлхүүр `lines.0.qty`; child null → өөрчлөхгүй; child `Unique` дэмжигдэхгүй; child ID = UUID эсвэл `IDInt` (DB serial/identity, INSERT-д id тавихгүй; payload id эерэг int64, буруу/халилт/0/сөрөг → 422 `<child>.<i>.<id>`, int4 баганад `CAST(? AS bigint)`; PK-гүй хүснэгт үгүй) | UForm нэршил; null-ээр санамсаргүй бүгдийг устгахаас сэргийлэх; unique-ийн хүрээ тодорхойгүй |
 | 9 | `Resource.Check()`, `Meta` нь DB/Can-гүйгээр; `Meta.Ref.Options` URL; `crud.Off()/On()`; `NotFound(msg)` | codegen offline ажиллах ёстой |
 | 10 | RLS: бүх зам `tenant.Tx` дотор (жагсаалт/export/options-ийг review-ийн дараа нэмсэн) | Strict policy-д `app.org_id`-гүй query хоосон гардаг |
 | 11 | `gorm.ErrRecordNotFound` hook-оос 404 БИШ 500; hook 404 хүсвэл `crud.NotFound` | Hook доторх санамсаргүй `First()` алдааг "мөр олдсонгүй" гэж буруу ойлгуулахгүй |

@@ -66,6 +66,25 @@ func (e *engine) childIDs(tx *gorm.DB, cp *childPlan, orgID string, parentID any
 	return out, rows.Err()
 }
 
+// idParam — child id-тай харьцуулах placeholder. IDInt үед `CAST(? AS bigint)`: int4 баганад
+// int4-өөс их id өгвөл pgx encode алдаа (500) биш, мөр олдохгүй (422) болно.
+func (cp *childPlan) idParam() string {
+	if cp.idKind == IDInt {
+		return "CAST(? AS bigint)"
+	}
+	return "?"
+}
+
+// idArg — каноник id мөрийг DB-д дамжих утга болгоно (IDInt → int64).
+func (cp *childPlan) idArg(id string) any {
+	if cp.idKind == IDInt {
+		if n, ok := parsePositiveInt(id); ok {
+			return n
+		}
+	}
+	return id
+}
+
 func normalizeScan(v any) any {
 	if b, ok := v.([]byte); ok {
 		return string(b)
@@ -150,7 +169,9 @@ func (e *engine) insertChild(tx *gorm.DB, cp *childPlan, orgID string, parentID 
 	}
 	row["org_id"] = orgID
 	row[cp.FK] = parentID
-	row[cp.idCol] = cp.gen()
+	if cp.idKind == IDUUID { // IDInt: id-г DB (serial/identity) өгнө
+		row[cp.idCol] = cp.gen()
+	}
 	if e.timestamps {
 		row["created_at"] = nowExpr()
 		row["updated_at"] = nowExpr()
@@ -169,7 +190,7 @@ func (e *engine) updateChild(tx *gorm.DB, cp *childPlan, orgID string, parentID 
 	if len(upd) == 0 {
 		return nil
 	}
-	q := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ? AND "+cp.idCol+" = ?", orgID, parentID, r.id)
+	q := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ? AND "+cp.idCol+" = "+cp.idParam(), orgID, parentID, r.idv)
 	if cp.SoftDelete {
 		q = q.Where("deleted_at IS NULL")
 	}
@@ -177,7 +198,7 @@ func (e *engine) updateChild(tx *gorm.DB, cp *childPlan, orgID string, parentID 
 }
 
 func (e *engine) deleteChild(tx *gorm.DB, cp *childPlan, orgID string, parentID any, id string) error {
-	q := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ? AND "+cp.idCol+" = ?", orgID, parentID, id)
+	q := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ? AND "+cp.idCol+" = "+cp.idParam(), orgID, parentID, cp.idArg(id))
 	if cp.SoftDelete {
 		upd := map[string]any{"deleted_at": nowExpr()}
 		if e.timestamps {

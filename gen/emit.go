@@ -320,9 +320,9 @@ func (e *emitter) child(ch crud.Child) {
 	e.p("{\n")
 	e.p("Name: %s,\nLabel: %s,\nTable: %s,\nFK: %s,\n", q(ch.Name), q(ch.Label), q(ch.Table), q(ch.FK))
 	if ch.ID.Column != "id" {
-		e.p("ID: crud.IDSpec{Column: %s, Kind: crud.IDUUID},\n", q(ch.ID.Column))
+		e.p("ID: crud.IDSpec{Column: %s, Kind: crud.%s},\n", q(ch.ID.Column), idConst(ch.ID.Kind))
 	} else {
-		e.p("ID: crud.IDSpec{Kind: crud.IDUUID},\n")
+		e.p("ID: crud.IDSpec{Kind: crud.%s},\n", idConst(ch.ID.Kind))
 	}
 	if ch.Order != "" {
 		e.p("Order: %s,\n", q(ch.Order))

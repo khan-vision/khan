@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/khan-vision/khan/validate"
@@ -92,7 +93,8 @@ func (e *engine) parseVersion(body map[string]json.RawMessage, errs validate.Err
 // childRow — body дахь child-ийн нэг мөр.
 type childRow struct {
 	idx  int
-	id   string // хоосон = шинэ мөр
+	id   string // хоосон = шинэ мөр; каноник мөр (IDInt үед аравтын тоо)
+	idv  any    // DB-д дамжих утга: UUID бол string, IDInt бол int64
 	vals Values
 }
 
@@ -135,12 +137,12 @@ func (e *engine) parseChildren(body map[string]json.RawMessage, create bool, err
 			}
 			row := childRow{idx: i}
 			if !create {
-				if id, ok := parseChildID(obj[cp.idCol], errs, prefix+cp.idCol); ok && id != "" {
+				if id, idv, ok := parseChildID(obj[cp.idCol], cp.idKind, errs, prefix+cp.idCol); ok && id != "" {
 					if seen[id] {
 						errs.Add(prefix+cp.idCol, "Давхардсан id")
 					}
 					seen[id] = true
-					row.id = id
+					row.id, row.idv = id, idv
 				}
 			}
 			row.vals = parseFields(cp.fields, obj, create || row.id == "", errs, prefix)
@@ -154,25 +156,61 @@ func (e *engine) parseChildren(body map[string]json.RawMessage, create bool, err
 	return out
 }
 
-// parseChildID — мөрийн id: хоосон/null → шинэ мөр; UUID бол жижиг үсэгтэй.
-func parseChildID(raw json.RawMessage, errs validate.Errors, field string) (string, bool) {
+// parseChildID — мөрийн id: хоосон/null → шинэ мөр. IDUUID: UUID мөр (жижиг үсэгтэй). IDInt:
+// эерэг int64 — JSON тоо эсвэл зөвхөн цифртэй мөр; сөрөг/0/бутархай/overflow/цифр биш → алдаа.
+// Буцаах: каноник мөр, DB-д дамжих утга.
+func parseChildID(raw json.RawMessage, kind IDKind, errs validate.Errors, field string) (string, any, bool) {
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 || string(raw) == "null" {
-		return "", true
+		return "", nil, true
 	}
 	var s string
-	if raw[0] != '"' || json.Unmarshal(raw, &s) != nil {
+	switch {
+	case raw[0] == '"':
+		if json.Unmarshal(raw, &s) != nil {
+			errs.Add(field, "id буруу")
+			return "", nil, false
+		}
+	case kind == IDInt:
+		s = string(raw) // JSON тоо: доорх цифрийн шалгалт
+	default:
 		errs.Add(field, "id буруу")
-		return "", false
+		return "", nil, false
 	}
 	if s == "" {
-		return "", true
+		return "", nil, true
+	}
+	if kind == IDInt {
+		n, ok := parsePositiveInt(s)
+		if !ok {
+			errs.Add(field, "id буруу")
+			return "", nil, false
+		}
+		return strconv.FormatInt(n, 10), n, true
 	}
 	if !validate.IsUUID(s) {
 		errs.Add(field, "id буруу")
-		return "", false
+		return "", nil, false
 	}
-	return lowerUUID(s), true
+	s = lowerUUID(s)
+	return s, s, true
+}
+
+// parsePositiveInt — зөвхөн цифрээс тогтсон, 1..MaxInt64 утгатай мөр.
+func parsePositiveInt(s string) (int64, bool) {
+	if s == "" || len(s) > 19 {
+		return 0, false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 func lowerUUID(s string) string {

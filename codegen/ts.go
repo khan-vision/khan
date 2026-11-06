@@ -281,8 +281,8 @@ func (g *tsGen) writeResource(b *strings.Builder, r tsRes) error {
 	for _, c := range r.children {
 		idKey := childIDColumn(c.meta)
 		writeInterface(b, c.pascal+"Payload", c.meta.Label+" — мөр (хүсэлт). `"+idKey+"` байвал засна, байхгүй бол шинээр нэмнэ.",
-			append([]ifaceMember{{name: idKey, typ: "string", opt: true, doc: "Байгаа мөрийн id"}}, payloadMembers(c.meta.Fields)...))
-		rowMembers := []ifaceMember{{name: idKey, typ: "string"}}
+			append([]ifaceMember{{name: idKey, typ: idTSType(c.meta.ID.Kind), opt: true, doc: "Байгаа мөрийн id"}}, payloadMembers(c.meta.Fields)...))
+		rowMembers := []ifaceMember{{name: idKey, typ: idTSType(c.meta.ID.Kind)}}
 		rowMembers = append(rowMembers, rowFieldMembers(c.meta.Fields)...)
 		writeInterface(b, c.pascal+"Row", c.meta.Label+" — мөр (хариу).", rowMembers)
 	}
@@ -333,7 +333,7 @@ func (g *tsGen) writeResource(b *strings.Builder, r tsRes) error {
 	// zod
 	for _, c := range r.children {
 		idKey := childIDColumn(c.meta)
-		members := []string{propKey(idKey) + ": z.string().regex(" + uuidRe + ", " + jsStr(idKey+" буруу") + ").optional()"}
+		members := []string{propKey(idKey) + ": " + childIDZod(c.meta, idKey) + ".optional()"}
 		if err := appendZodFields(&members, c.meta.Fields); err != nil {
 			return fmt.Errorf("khan/codegen: %s.%s: %w", m.Name, c.meta.Name, err)
 		}
@@ -763,6 +763,14 @@ func fieldRules(f crud.FieldMeta) ([]string, error) {
 		rules = append(rules, "khanRange("+jsStr(lbl)+", "+fmt.Sprint(scale)+minMaxArgs(f)+")")
 	}
 	return rules, nil
+}
+
+// childIDZod — child id-ийн zod илэрхийлэл: IDInt бол эерэг бүхэл тоо, үгүй бол UUID.
+func childIDZod(c crud.ChildMeta, idKey string) string {
+	if c.ID.Kind == crud.IDInt {
+		return "z.number().int().positive(" + jsStr(idKey+" буруу") + ")"
+	}
+	return "z.string().regex(" + uuidRe + ", " + jsStr(idKey+" буруу") + ")"
 }
 
 // childIDColumn — child мөрийн id-ийн түлхүүр (crud.ChildMeta.ID.Column; хоосон бол "id").

@@ -50,6 +50,7 @@ type childPlan struct {
 	Child
 	label   string
 	idCol   string
+	idKind  IDKind // IDInt: id-г DB үүсгэнэ (serial/identity), payload-д эерэг бүхэл тоо
 	order   string
 	maxRows int
 	fields  []fieldPlan
@@ -384,11 +385,8 @@ func compileChild(ch Child, e *engine) (childPlan, error) {
 		return cp, fmt.Errorf("FK буруу: %q", ch.FK)
 	}
 	var err error
-	if cp.idCol, _, cp.gen, err = compileID(ch.ID); err != nil {
+	if cp.idCol, cp.idKind, cp.gen, err = compileID(ch.ID); err != nil {
 		return cp, fmt.Errorf("ID: %v", err)
-	}
-	if ch.ID.Kind == IDInt {
-		return cp, errors.New("child ID: зөвхөн UUID дэмжигдэнэ")
 	}
 	cp.order = ch.Order
 	if cp.order == "" {

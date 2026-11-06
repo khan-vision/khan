@@ -138,6 +138,12 @@
               "null"
             ]
           },
+          "contacts": {
+            "items": {
+              "$ref": "#/components/schemas/ConferenceRoomContacts"
+            },
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "type": [
@@ -303,6 +309,42 @@
         ],
         "type": "object"
       },
+      "ConferenceRoomContacts": {
+        "additionalProperties": true,
+        "description": "Холбоо барих",
+        "properties": {
+          "phone": {
+            "description": "Утас. Монгол 8 оронтой дугаар (+976 хасагдана) эсвэл E.164 `+…`",
+            "type": "string"
+          },
+          "row_id": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "row_id"
+        ],
+        "type": "object"
+      },
+      "ConferenceRoomContactsInput": {
+        "description": "Холбоо барих",
+        "properties": {
+          "phone": {
+            "description": "Утас. Монгол 8 оронтой дугаар (+976 хасагдана) эсвэл E.164 `+…`",
+            "type": "string"
+          },
+          "row_id": {
+            "description": "Байгаа мөрийг засахад; байхгүй бол шинэ мөр",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "type": "object"
+      },
       "ConferenceRoomCreate": {
         "additionalProperties": false,
         "description": "Хурлын өрөө — үүсгэх хүсэлт",
@@ -344,6 +386,14 @@
               "string",
               "null"
             ]
+          },
+          "contacts": {
+            "description": "Холбоо барих: бүрэн жагсаалт",
+            "items": {
+              "$ref": "#/components/schemas/ConferenceRoomContactsInput"
+            },
+            "maxItems": 10,
+            "type": "array"
           },
           "description": {
             "description": "Тайлбар",
@@ -629,6 +679,14 @@
               "string",
               "null"
             ]
+          },
+          "contacts": {
+            "description": "Холбоо барих: бүрэн жагсаалт (түлхүүр алга/null бол өөрчлөгдөхгүй)",
+            "items": {
+              "$ref": "#/components/schemas/ConferenceRoomContactsInput"
+            },
+            "maxItems": 10,
+            "type": "array"
           },
           "description": {
             "description": "Тайлбар",
