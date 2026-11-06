@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gofiber/fiber/v3"
 	"github.com/khan-vision/khan/crud"
 	"github.com/khan-vision/khan/lookup"
 	"github.com/khan-vision/khan/validate"
@@ -68,5 +69,49 @@ func TestChildIDColumnAndExposeMeta(t *testing.T) {
 	oa, _ = OpenAPI([]crud.Meta{m}, Info{})
 	if strings.Contains(string(oa), `"/invoices/meta"`) {
 		t.Error("ExposeMeta=false үед /meta бичигдэв")
+	}
+}
+
+// Scope тайлбар: tenant → байхгүй; shared/global → TS comment + OpenAPI description, /system path.
+func TestScopeDocs(t *testing.T) {
+	mk := func(scope crud.Scope, sysCan bool) crud.Meta {
+		r := &crud.Resource[map[string]any]{
+			Name: "test.thing", Label: "Зүйл", Endpoint: "/things", Table: "test.thing", Scope: scope,
+			Fields: []crud.Field{{Name: "name", Label: "Нэр", Kind: validate.String, Rules: validate.Rules{Required: true}}},
+		}
+		if sysCan {
+			r.SystemCan = func(fiber.Ctx, crud.Action) bool { return false }
+		}
+		return r.Meta()
+	}
+	tenant, shared, sharedRO, global := mk(crud.ScopeTenant, false), mk(crud.ScopeShared, true), mk(crud.ScopeShared, false), mk(crud.ScopeGlobal, false)
+	ts := func(m crud.Meta) string {
+		b, err := TS([]crud.Meta{m}, TSOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	oa := func(m crud.Meta) string {
+		b, err := OpenAPI([]crud.Meta{m}, Info{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	if strings.Contains(ts(tenant), "Scope") || strings.Contains(oa(tenant), "x-khan-scope") {
+		t.Error("tenant resource-д scope тайлбар орсон")
+	}
+	if s := ts(shared); !strings.Contains(s, "thingScope = \"shared\"") || !strings.Contains(s, "/things/system") {
+		t.Errorf("shared TS:\n%s", s)
+	}
+	if s := oa(shared); !strings.Contains(s, `"/things/system"`) || !strings.Contains(s, `"x-khan-scope": "shared"`) {
+		t.Errorf("shared OpenAPI:\n%s", s)
+	}
+	if s := ts(sharedRO); !strings.Contains(s, "боломжгүй (403)") || strings.Contains(oa(sharedRO), "/things/system") {
+		t.Errorf("shared read-only:\n%s", s)
+	}
+	if s := ts(global); !strings.Contains(s, "Унших-л") || !strings.Contains(oa(global), `"x-khan-scope": "global"`) {
+		t.Errorf("global:\n%s", s)
 	}
 }

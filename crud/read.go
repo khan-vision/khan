@@ -22,7 +22,7 @@ func (e *engine) scopedQuery(db *gorm.DB, orgID string, custom func(*gorm.DB, st
 	} else {
 		q = db.Table(e.table + " " + e.alias)
 	}
-	q = q.Where(e.alias+".org_id = ?", orgID)
+	q = e.readWhere(q, e.alias+".", orgID)
 	if e.softDelete {
 		q = q.Where(e.alias + ".deleted_at IS NULL")
 	}
@@ -78,7 +78,7 @@ func (e *engine) loadDetail(db *gorm.DB, orgID string, idVal any) (map[string]an
 }
 
 func (e *engine) loadChildren(db *gorm.DB, cp *childPlan, orgID string, parentID any) ([]map[string]any, error) {
-	q := db.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ?", orgID, parentID)
+	q := e.readWhere(db.Table(cp.Table), "", orgID).Where(cp.FK+" = ?", parentID)
 	if cp.SoftDelete {
 		q = q.Where("deleted_at IS NULL")
 	}
@@ -140,8 +140,8 @@ func (e *engine) overlayDecimals(db *gorm.DB, orgID string, idVal any, row map[s
 		sel = append(sel, "CAST("+quote(f.col)+" AS text) AS "+quote(f.Name))
 	}
 	var rows []map[string]any
-	err := db.Table(e.table).Select(strings.Join(sel, ", ")).
-		Where("org_id = ? AND "+quote(e.idCol)+" = "+e.idParam(), orgID, idVal).Limit(1).Find(&rows).Error
+	err := e.readWhere(db.Table(e.table).Select(strings.Join(sel, ", ")), "", orgID).
+		Where(quote(e.idCol)+" = "+e.idParam(), idVal).Limit(1).Find(&rows).Error
 	if err != nil {
 		return err
 	}
@@ -180,8 +180,8 @@ func (e *engine) overlayListDecimals(db *gorm.DB, orgID string, dest any) error 
 		sel = append(sel, "CAST("+quote(f.col)+" AS text) AS "+quote(f.Name))
 	}
 	var dec []map[string]any
-	err := db.Table(e.table).Select(strings.Join(sel, ", ")).
-		Where("org_id = ?", orgID).Where(quote(e.idCol)+" IN ?", ids).Find(&dec).Error
+	err := e.readWhere(db.Table(e.table).Select(strings.Join(sel, ", ")), "", orgID).
+		Where(quote(e.idCol)+" IN ?", ids).Find(&dec).Error
 	if err != nil {
 		return err
 	}

@@ -3,6 +3,7 @@ package crud
 import (
 	"fmt"
 
+	"github.com/khan-vision/khan/tenant"
 	"github.com/khan-vision/khan/validate"
 	"gorm.io/gorm"
 )
@@ -15,7 +16,7 @@ type childState struct {
 
 // checkChildren — update үед өгөгдсөн id-ууд энэ эцэг+org-ынх эсэх, ref-үүд олдох эсэхийг шалгана.
 // parentID nil (create) үед existing хоосон.
-func (e *engine) checkChildren(tx *gorm.DB, orgID string, parentID any, inputs map[string]*childInput, errs validate.Errors) (map[string]*childState, error) {
+func (e *engine) checkChildren(tx *gorm.DB, o owner, parentID any, inputs map[string]*childInput, errs validate.Errors) (map[string]*childState, error) {
 	states := map[string]*childState{}
 	for ci := range e.children {
 		cp := &e.children[ci]
@@ -25,7 +26,7 @@ func (e *engine) checkChildren(tx *gorm.DB, orgID string, parentID any, inputs m
 		}
 		st := &childState{in: in, existing: map[string]bool{}}
 		if parentID != nil {
-			ids, err := e.childIDs(tx, cp, orgID, parentID)
+			ids, err := e.childIDs(tx, cp, o, parentID)
 			if err != nil {
 				return nil, err
 			}
@@ -36,7 +37,7 @@ func (e *engine) checkChildren(tx *gorm.DB, orgID string, parentID any, inputs m
 				}
 			}
 		}
-		if err := e.checkChildRefs(tx, orgID, cp, in, errs); err != nil {
+		if err := e.checkChildRefs(tx, o, cp, in, errs); err != nil {
 			return nil, err
 		}
 		states[cp.Name] = st
@@ -45,8 +46,8 @@ func (e *engine) checkChildren(tx *gorm.DB, orgID string, parentID any, inputs m
 }
 
 // childIDs — эцэг + org-д хамаарах child id-ууд.
-func (e *engine) childIDs(tx *gorm.DB, cp *childPlan, orgID string, parentID any) (map[string]bool, error) {
-	q := tx.Table(cp.Table).Select(cp.idCol).Where("org_id = ? AND "+cp.FK+" = ?", orgID, parentID)
+func (e *engine) childIDs(tx *gorm.DB, cp *childPlan, o owner, parentID any) (map[string]bool, error) {
+	q := e.ownWhere(tx.Table(cp.Table).Select(cp.idCol), "", o).Where(cp.FK+" = ?", parentID)
 	if cp.SoftDelete {
 		q = q.Where("deleted_at IS NULL")
 	}
@@ -74,7 +75,7 @@ func normalizeScan(v any) any {
 }
 
 // checkChildRefs — child талбар бүрийн Ref утгуудыг НЭГ batch-аар шалгана.
-func (e *engine) checkChildRefs(tx *gorm.DB, orgID string, cp *childPlan, in *childInput, errs validate.Errors) error {
+func (e *engine) checkChildRefs(tx *gorm.DB, o owner, cp *childPlan, in *childInput, errs validate.Errors) error {
 	for i := range cp.fields {
 		f := &cp.fields[i]
 		if f.ref == nil {
@@ -86,7 +87,15 @@ func (e *engine) checkChildRefs(tx *gorm.DB, orgID string, cp *childPlan, in *ch
 				vals = append(vals, v)
 			}
 		}
-		missing, err := f.ref.Exists(tx, orgID, vals)
+		if o.system && f.ref.TenantScoped() && len(vals) > 0 { // системийн мөр org-ийн лавлах руу заахгүй
+			for _, r := range in.rows {
+				if v, ok := r.vals[f.col]; ok && v != nil {
+					errs.Add(fmt.Sprintf("%s.%d.%s", cp.Name, r.idx, f.Name), f.label+": системийн мөрөнд байгууллагын лавлахыг холбох боломжгүй")
+				}
+			}
+			continue
+		}
+		missing, err := f.ref.Exists(tx, o.org, vals)
 		if err != nil {
 			return err
 		}
@@ -108,7 +117,7 @@ func (e *engine) checkChildRefs(tx *gorm.DB, orgID string, cp *childPlan, in *ch
 
 // writeChildren — "бүрэн жагсаалт" семантик: id-тай мөр update, id-гүй insert, жагсаалтад
 // ороогүй байгаа мөр delete. org_id, FK, id-г сервер тавина.
-func (e *engine) writeChildren(tx *gorm.DB, orgID string, parentID any, states map[string]*childState) error {
+func (e *engine) writeChildren(tx *gorm.DB, o owner, parentID any, states map[string]*childState) error {
 	for ci := range e.children {
 		cp := &e.children[ci]
 		st := states[cp.Name]
@@ -123,7 +132,7 @@ func (e *engine) writeChildren(tx *gorm.DB, orgID string, parentID any, states m
 		}
 		for id := range st.existing {
 			if !keep[id] {
-				if err := e.deleteChild(tx, cp, orgID, parentID, id); err != nil {
+				if err := e.deleteChild(tx, cp, o, parentID, id); err != nil {
 					return err
 				}
 			}
@@ -131,9 +140,9 @@ func (e *engine) writeChildren(tx *gorm.DB, orgID string, parentID any, states m
 		for _, r := range st.in.rows {
 			var err error
 			if r.id != "" {
-				err = e.updateChild(tx, cp, orgID, parentID, r)
+				err = e.updateChild(tx, cp, o, parentID, r)
 			} else {
-				err = e.insertChild(tx, cp, orgID, parentID, r)
+				err = e.insertChild(tx, cp, o, parentID, r)
 			}
 			if err != nil {
 				return err
@@ -143,22 +152,28 @@ func (e *engine) writeChildren(tx *gorm.DB, orgID string, parentID any, states m
 	return nil
 }
 
-func (e *engine) insertChild(tx *gorm.DB, cp *childPlan, orgID string, parentID any, r childRow) error {
+func (e *engine) insertChild(tx *gorm.DB, cp *childPlan, o owner, parentID any, r childRow) error {
 	row := make(map[string]any, len(r.vals)+5)
 	for k, v := range r.vals {
 		row[k] = dbValue(v)
 	}
-	row["org_id"] = orgID
+	if e.scope != ScopeGlobal {
+		row["org_id"] = o.orgValue() // child нь эцгийнхээ эзэмшигчийг дагана (системийн эцэг → NULL)
+	}
 	row[cp.FK] = parentID
 	row[cp.idCol] = cp.gen()
 	if e.timestamps {
 		row["created_at"] = nowExpr()
 		row["updated_at"] = nowExpr()
 	}
-	return tx.Table(cp.Table).Create(row).Error
+	q := tx.Table(cp.Table)
+	if o.system {
+		q = tenant.SystemRow(q)
+	}
+	return q.Create(row).Error
 }
 
-func (e *engine) updateChild(tx *gorm.DB, cp *childPlan, orgID string, parentID any, r childRow) error {
+func (e *engine) updateChild(tx *gorm.DB, cp *childPlan, o owner, parentID any, r childRow) error {
 	upd := make(map[string]any, len(r.vals)+1)
 	for k, v := range r.vals {
 		upd[k] = dbValue(v)
@@ -169,15 +184,15 @@ func (e *engine) updateChild(tx *gorm.DB, cp *childPlan, orgID string, parentID 
 	if len(upd) == 0 {
 		return nil
 	}
-	q := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ? AND "+cp.idCol+" = ?", orgID, parentID, r.id)
+	q := e.ownWhere(tx.Table(cp.Table), "", o).Where(cp.FK+" = ? AND "+cp.idCol+" = ?", parentID, r.id)
 	if cp.SoftDelete {
 		q = q.Where("deleted_at IS NULL")
 	}
 	return q.Updates(upd).Error
 }
 
-func (e *engine) deleteChild(tx *gorm.DB, cp *childPlan, orgID string, parentID any, id string) error {
-	q := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ? AND "+cp.idCol+" = ?", orgID, parentID, id)
+func (e *engine) deleteChild(tx *gorm.DB, cp *childPlan, o owner, parentID any, id string) error {
+	q := e.ownWhere(tx.Table(cp.Table), "", o).Where(cp.FK+" = ? AND "+cp.idCol+" = ?", parentID, id)
 	if cp.SoftDelete {
 		upd := map[string]any{"deleted_at": nowExpr()}
 		if e.timestamps {
@@ -189,10 +204,10 @@ func (e *engine) deleteChild(tx *gorm.DB, cp *childPlan, orgID string, parentID 
 }
 
 // deleteAllChildren — эцгийг hard delete хийхэд бүх child мөрийг (soft эсэхээс үл хамааран) устгана.
-func (e *engine) deleteAllChildren(tx *gorm.DB, orgID string, parentID any) error {
+func (e *engine) deleteAllChildren(tx *gorm.DB, o owner, parentID any) error {
 	for ci := range e.children {
 		cp := &e.children[ci]
-		err := tx.Table(cp.Table).Where("org_id = ? AND "+cp.FK+" = ?", orgID, parentID).Delete(map[string]any{}).Error
+		err := e.ownWhere(tx.Table(cp.Table), "", o).Where(cp.FK+" = ?", parentID).Delete(map[string]any{}).Error
 		if err != nil {
 			return err
 		}

@@ -313,3 +313,41 @@ func TestTenantRequireIntegration(t *testing.T) {
 		t.Fatalf("?org_id-д итгэж болохгүй: %d", resp.StatusCode)
 	}
 }
+
+func TestSharedSpecDB(t *testing.T) {
+	db, schema := lookupFixture(t)
+	if err := db.Exec(`CREATE TABLE ` + schema + `.kind (id uuid PRIMARY KEY, org_id uuid, name text NOT NULL)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	const sys, mine, other = "bbbbbbbb-0000-0000-0000-000000000001", "bbbbbbbb-0000-0000-0000-000000000002", "bbbbbbbb-0000-0000-0000-000000000003"
+	if err := db.Exec(`INSERT INTO `+schema+`.kind VALUES (?, NULL, 'Систем'), (?, ?, 'Минийх'), (?, ?, 'Бусдын')`, sys, mine, orgA, other, orgB).Error; err != nil {
+		t.Fatal(err)
+	}
+	spec := Spec{Table: schema + ".kind", Label: []string{"name"}, Shared: true, Kind: validate.UUID}
+	if err := spec.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	code, out, body := call(t, spec.Handler(func() *gorm.DB { return db }, orgFn(orgA)), "")
+	if code != 200 || len(out.Data) != 2 || out.Data[0].Value != mine || out.Data[1].Value != sys {
+		t.Fatalf("shared options (өөрийн + систем): %d %s", code, body)
+	}
+	// ids-ээр өөр org-ийн мөр гарахгүй
+	_, out, body = call(t, spec.Handler(func() *gorm.DB { return db }, orgFn(orgA)), "?ids="+other+","+sys)
+	if len(out.Data) != 1 || out.Data[0].Value != sys {
+		t.Fatalf("ids: %s", body)
+	}
+	missing, err := spec.Exists(db, orgA, []any{sys, mine, other})
+	if err != nil || len(missing) != 1 || missing[0] != other {
+		t.Fatalf("Exists missing=%v err=%v", missing, err)
+	}
+	// Shared нь org шаардана (хоосон org → алдаа)
+	if _, err := spec.Exists(db, "", []any{sys}); err == nil {
+		t.Fatal("хоосон org-д Shared Exists алдаагүй")
+	}
+	// Shared + TenantOff зөрчил
+	bad := spec
+	bad.Tenant = TenantOff()
+	if err := bad.Validate(); err == nil {
+		t.Fatal("Shared + TenantOff зөвшөөрөгдлөө")
+	}
+}

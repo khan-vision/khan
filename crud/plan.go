@@ -62,6 +62,10 @@ type childPlan struct {
 type engine struct {
 	name, label, endpoint, table, alias string
 
+	scope        Scope
+	systemCan    func(c fiber.Ctx, a Action) bool
+	globalWrites bool
+
 	idCol  string
 	idKind IDKind
 	gen    func() string
@@ -115,6 +119,7 @@ func (r *Resource[T]) Check() error {
 func (r *Resource[T]) build(runtime bool) (*engine, error) {
 	e := &engine{
 		name: r.Name, label: r.Label, endpoint: r.Endpoint, table: r.Table, alias: r.Alias,
+		scope: r.Scope, systemCan: r.SystemCan, globalWrites: r.GlobalWrites,
 		list: r.ListQuery, detail: r.DetailQuery, listSpec: r.List, export: r.Export, bulk: r.Bulk,
 		can: r.Can, validate: r.Validate, hooks: r.Hooks,
 		softDelete: r.SoftDelete, versionCol: r.Version, trackUser: r.TrackUser, rls: r.RLS,
@@ -144,6 +149,9 @@ func (r *Resource[T]) build(runtime bool) (*engine, error) {
 	}
 	if !identRe.MatchString(e.alias) {
 		return fail("Alias буруу: %q", e.alias)
+	}
+	if !e.scope.valid() {
+		return fail("Scope буруу: %d", uint8(e.scope))
 	}
 	if runtime {
 		if r.DB == nil {
@@ -247,6 +255,9 @@ func (r *Resource[T]) build(runtime bool) (*engine, error) {
 	}
 	if e.events && !nameRe.MatchString(e.name) {
 		return fail("Events: Name event topic-д тохирохгүй")
+	}
+	if err := e.checkScope(); err != nil {
+		return fail("%v", err)
 	}
 	if err := e.checkBulk(); err != nil {
 		return fail("%v", err)
@@ -444,6 +455,7 @@ func (e *engine) checkBulk() error {
 		return errors.New("Bulk.SoftDelete=true боловч resource SoftDelete биш")
 	}
 	b.IntIDs = e.idKind == IDInt
+	b.NoOrg = e.scope == ScopeGlobal // org_id-гүй хүснэгт; бусад scope-д үргэлж org_id = ? (NoOrg хэрэглэгчийн утгыг дарна)
 	cols := map[string]*fieldPlan{}
 	for i := range e.fields {
 		cols[e.fields[i].col] = &e.fields[i]

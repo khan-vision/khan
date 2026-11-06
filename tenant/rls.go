@@ -35,6 +35,9 @@ const SettingBypass = "app.bypass_rls"
 // PolicyName — khan-ийн үүсгэдэг RLS policy-ийн нэр.
 const PolicyName = "khan_tenant_isolation"
 
+// SystemPolicyName — PolicyOptions.SystemRows-ийн нэмэлт (унших) policy-ийн нэр.
+const SystemPolicyName = "khan_system_rows_read"
+
 // ErrNotInTx — WithOrg/WithBypass-ийг транзакцгүй дуудав (тохиргоо SET LOCAL тул
 // транзакцгүй бол дараагийн хүсэлтэд connection-оор дамжин алдагдана).
 var ErrNotInTx = errors.New("tenant: транзакц дотор дуудах ёстой")
@@ -145,6 +148,11 @@ type PolicyOptions struct {
 	ColumnType string
 	// NoForce — FORCE ROW LEVEL SECURITY тавихгүй (эзэнд үйлчлэхгүй болно).
 	NoForce bool
+	// SystemRows — hybrid (shared) хүснэгт: org_id IS NULL (системийн) мөрийг бүх org УНШИХ боломжтой
+	// болгоно (нэмэлт `FOR SELECT` policy, SystemPolicyName). Бичилт (INSERT/UPDATE/DELETE)-д үндсэн
+	// policy хэвээр тул tenant системийн мөрийг өөрчилж/өөртөө авч чадахгүй; системийн мөр бичих нь
+	// bypass (WithBypass/SystemTx)-ээр л.
+	SystemRows bool
 }
 
 var (
@@ -193,6 +201,10 @@ func PolicySQL(table string, o PolicyOptions) (string, error) {
 	}
 	fmt.Fprintf(&b, "DROP POLICY IF EXISTS %s ON %s;\n", PolicyName, table)
 	fmt.Fprintf(&b, "CREATE POLICY %s ON %s\n  USING %s\n  WITH CHECK %s;\n", PolicyName, table, pred, pred)
+	fmt.Fprintf(&b, "DROP POLICY IF EXISTS %s ON %s;\n", SystemPolicyName, table)
+	if o.SystemRows {
+		fmt.Fprintf(&b, "CREATE POLICY %s ON %s FOR SELECT\n  USING (%s IS NULL);\n", SystemPolicyName, table, col)
+	}
 	return b.String(), nil
 }
 
@@ -201,8 +213,8 @@ func DropPolicySQL(table string) (string, error) {
 	if !qualifiedRe.MatchString(table) {
 		return "", fmt.Errorf("tenant: хүснэгтийн нэр schema.name байх ёстой: %q", table)
 	}
-	return fmt.Sprintf("DROP POLICY IF EXISTS %s ON %s;\nALTER TABLE %s NO FORCE ROW LEVEL SECURITY;\nALTER TABLE %s DISABLE ROW LEVEL SECURITY;\n",
-		PolicyName, table, table, table), nil
+	return fmt.Sprintf("DROP POLICY IF EXISTS %s ON %s;\nDROP POLICY IF EXISTS %s ON %s;\nALTER TABLE %s NO FORCE ROW LEVEL SECURITY;\nALTER TABLE %s DISABLE ROW LEVEL SECURITY;\n",
+		PolicyName, table, SystemPolicyName, table, table, table), nil
 }
 
 // TenantTables — catalog-оос org_id баганатай энгийн хүснэгтүүд (RLS/Guard-ийн хүрээ).

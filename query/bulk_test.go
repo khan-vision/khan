@@ -242,3 +242,17 @@ func TestParseBulk_NumberBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestBulk_NoOrg(t *testing.T) {
+	spec := roomBulk()
+	spec.NoOrg = true
+	c, _ := bulkSQL(t, `{"action":"delete","ids":["`+idA+`"]}`, spec, "org-A")
+	if strings.Contains(c.sql, "org_id") || !strings.Contains(c.sql, "WHERE id IN ($1)") {
+		t.Fatalf("NoOrg үед org_id нөхцөл байх ёсгүй: %s", c.sql)
+	}
+	// анхдагч (NoOrg=false) хэвээр org-той
+	c, _ = bulkSQL(t, `{"action":"delete","ids":["`+idA+`"]}`, roomBulk(), "org-A")
+	if !strings.Contains(c.sql, "org_id = $1") {
+		t.Fatalf("org_id алга: %s", c.sql)
+	}
+}
