@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
 
 // legacyRun — refactor-оос ӨМНӨХ Run-ийн хуулбар (зөвхөн SQL харьцуулах тестэд).
-func legacyRun(c *fiber.Ctx, newQuery func() *gorm.DB, dest interface{}, spec Spec) (fiber.Map, error) {
+func legacyRun(c fiber.Ctx, newQuery func() *gorm.DB, dest interface{}, spec Spec) (fiber.Map, error) {
 	defLimit := spec.DefaultLimit
 	if defLimit <= 0 {
 		defLimit = 25
@@ -20,11 +20,11 @@ func legacyRun(c *fiber.Ctx, newQuery func() *gorm.DB, dest interface{}, spec Sp
 	if maxLimit <= 0 {
 		maxLimit = 500
 	}
-	page := c.QueryInt("page", 1)
+	page := fiber.Query[int](c, "page", 1)
 	if page < 1 {
 		page = 1
 	}
-	limit := c.QueryInt("limit", defLimit)
+	limit := fiber.Query[int](c, "limit", defLimit)
 	if limit < 1 {
 		limit = defLimit
 	}
@@ -64,7 +64,7 @@ func legacyRun(c *fiber.Ctx, newQuery func() *gorm.DB, dest interface{}, spec Sp
 }
 
 // capturedRun — өгөгдсөн run функцийг query string-тэй дуудаж SQL-үүдийг буцаана.
-func capturedRun(t *testing.T, query string, run func(*fiber.Ctx, func() *gorm.DB, interface{}, Spec) (fiber.Map, error)) ([]captured, error) {
+func capturedRun(t *testing.T, query string, run func(fiber.Ctx, func() *gorm.DB, interface{}, Spec) (fiber.Map, error)) ([]captured, error) {
 	t.Helper()
 	db, log := captureDB(t)
 	newQuery := func() *gorm.DB {
@@ -75,12 +75,12 @@ func capturedRun(t *testing.T, query string, run func(*fiber.Ctx, func() *gorm.D
 	}
 	app := fiber.New()
 	var runErr error
-	app.Get("/list", func(c *fiber.Ctx) error {
+	app.Get("/list", func(c fiber.Ctx) error {
 		var rows []map[string]interface{}
 		_, runErr = run(c, newQuery, &rows, invoiceSpec())
 		return c.SendString("ok")
 	})
-	if _, err := app.Test(httptest.NewRequest("GET", "/list?"+query, nil), -1); err != nil {
+	if _, err := app.Test(httptest.NewRequest("GET", "/list?"+query, nil), noTimeout); err != nil {
 		t.Fatalf("fiber test: %v", err)
 	}
 	return log.all(), runErr
@@ -122,7 +122,7 @@ func TestRun_RefactorKeepsIdenticalSQL(t *testing.T) {
 func TestRunRequest_FromQueryEqualsRun(t *testing.T) {
 	q := "page=2&limit=7&search=abc&sort=invoice_date&dir=asc"
 	a, _ := capturedRun(t, q, Run)
-	b, _ := capturedRun(t, q, func(c *fiber.Ctx, nq func() *gorm.DB, d interface{}, s Spec) (fiber.Map, error) {
+	b, _ := capturedRun(t, q, func(c fiber.Ctx, nq func() *gorm.DB, d interface{}, s Spec) (fiber.Map, error) {
 		return RunRequest(FromQuery(c), nq, d, s)
 	})
 	if !reflect.DeepEqual(a, b) {
@@ -205,28 +205,28 @@ func TestRequestFrom_PostBodyVsQuery(t *testing.T) {
 	app := fiber.New()
 	var got Request
 	var gotErr error
-	h := func(c *fiber.Ctx) error {
+	h := func(c fiber.Ctx) error {
 		got, gotErr = RequestFrom(c)
 		return c.SendString("ok")
 	}
 	app.Get("/", h)
 	app.Post("/query", h)
 
-	_, _ = app.Test(httptest.NewRequest("GET", "/?page=3&limit=9&search=s&sort=a&dir=asc&filters=%7B%7D", nil), -1)
+	_, _ = app.Test(httptest.NewRequest("GET", "/?page=3&limit=9&search=s&sort=a&dir=asc&filters=%7B%7D", nil), noTimeout)
 	if gotErr != nil || got.Page != 3 || got.Limit != 9 || got.Search != "s" || got.Sort != "a" || got.Dir != "asc" || got.Filters != "{}" {
 		t.Fatalf("GET: %#v %v", got, gotErr)
 	}
 
 	req := httptest.NewRequest("POST", "/query?page=99", strings.NewReader(`{"page":4,"limit":11}`))
 	req.Header.Set("Content-Type", "application/json")
-	_, _ = app.Test(req, -1)
+	_, _ = app.Test(req, noTimeout)
 	if gotErr != nil || got.Page != 4 || got.Limit != 11 {
 		t.Fatalf("POST body давуу байх ёстой: %#v %v", got, gotErr)
 	}
 
 	req = httptest.NewRequest("POST", "/query", strings.NewReader(`{bad`))
 	req.Header.Set("Content-Type", "application/json")
-	_, _ = app.Test(req, -1)
+	_, _ = app.Test(req, noTimeout)
 	if !IsFilterError(gotErr) {
 		t.Fatalf("буруу body → FilterError, got %v", gotErr)
 	}

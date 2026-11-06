@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/khan-vision/khan/config"
 	"github.com/khan-vision/khan/tenant"
@@ -36,7 +36,7 @@ func TestGuardLocal(t *testing.T) {
 
 func TestWithClaimsAndTenant(t *testing.T) {
 	app := fiber.New()
-	app.Get("/", WithClaims(Claims("u1", "org-A", 6)), func(c *fiber.Ctx) error {
+	app.Get("/", WithClaims(Claims("u1", "org-A", 6)), func(c fiber.Ctx) error {
 		org, ok := tenant.Require(c)
 		if !ok {
 			return nil

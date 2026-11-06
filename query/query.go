@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
 
@@ -56,7 +56,7 @@ type Spec struct {
 //	resp, err := query.Run(c, newQuery, &rows, query.Spec{...})
 //	if err != nil { return c.Status(500).JSON(fiber.Map{"error": err.Error()}) }
 //	return c.JSON(resp)
-func Run(c *fiber.Ctx, newQuery func() *gorm.DB, dest interface{}, spec Spec) (fiber.Map, error) {
+func Run(c fiber.Ctx, newQuery func() *gorm.DB, dest interface{}, spec Spec) (fiber.Map, error) {
 	return RunRequest(FromQuery(c), newQuery, dest, spec)
 }
 

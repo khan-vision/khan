@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
@@ -38,8 +38,8 @@ func testResource(t *testing.T, canWrite bool) (Resource, *sqlLog) {
 		Export:   &ex,
 		Bulk:     &bulk,
 		DB:       session,
-		Can:      func(c *fiber.Ctx) map[string]bool { return map[string]bool{"read": true} },
-		CanWrite: func(c *fiber.Ctx) bool { return canWrite },
+		Can:      func(c fiber.Ctx) map[string]bool { return map[string]bool{"read": true} },
+		CanWrite: func(c fiber.Ctx) bool { return canWrite },
 	}
 	return r, log
 }
@@ -48,7 +48,7 @@ func testResource(t *testing.T, canWrite bool) (Resource, *sqlLog) {
 func newApp(r Resource, withJWT bool) *fiber.App {
 	app := fiber.New()
 	if withJWT {
-		app.Use(func(c *fiber.Ctx) error {
+		app.Use(func(c fiber.Ctx) error {
 			c.Locals("user", &jwt.Token{Claims: jwt.MapClaims{"org_id": orgA, "id": "1", "role": float64(5)}})
 			return c.Next()
 		})
@@ -68,7 +68,7 @@ func do(t *testing.T, app *fiber.App, method, url, body string) *http.Response {
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := app.Test(req, -1)
+	resp, err := app.Test(req, noTimeout)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestResource_NilExportAndBulkAre404(t *testing.T) {
 func TestResource_OrgOverride(t *testing.T) {
 	r, log := testResource(t, true)
 	called := false
-	r.Org = func(c *fiber.Ctx) (string, bool) { called = true; return orgA, true }
+	r.Org = func(c fiber.Ctx) (string, bool) { called = true; return orgA, true }
 	app := newApp(r, false)
 	do(t, app, "GET", "/rooms/", "")
 	if !called {

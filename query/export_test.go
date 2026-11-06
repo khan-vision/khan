@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
@@ -198,10 +198,10 @@ func TestContentDisposition(t *testing.T) {
 // sendXLSX — header-үүд (rows/truncated) + xlsx body.
 func TestSendXLSX_Headers(t *testing.T) {
 	app := fiber.New()
-	app.Get("/x", func(c *fiber.Ctx) error {
+	app.Get("/x", func(c fiber.Ctx) error {
 		return sendXLSX(c, roomExport(), fakeRows(25))
 	})
-	resp, err := app.Test(httptest.NewRequest("GET", "/x", nil), -1)
+	resp, err := app.Test(httptest.NewRequest("GET", "/x", nil), noTimeout)
 	if err != nil {
 		t.Fatal(err)
 	}

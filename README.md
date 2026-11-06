@@ -7,6 +7,11 @@ schema-driven CRUD, relation-validated select, lifecycle hook, per-module CRUD �
 (`init()` side effect, global state, runtime codegen, console sync, raw SQL concat, олон dialect) засаж
 шинээр бичсэн.
 
+## Хувилбар
+
+Fiber болон GORM үргэлж хамгийн сүүлийн хувилбар дээр байна. Одоо: Go 1.26, Fiber v3.6.1, GORM v1.31.2,
+gorm postgres driver v1.6.3, golang-jwt v5.
+
 ## Зарчим
 
 - `init()`-д side effect хийхгүй. Бүх зүйл `Load`/`Open`/`New`-ээр explicit үүсэж, error буцаана.

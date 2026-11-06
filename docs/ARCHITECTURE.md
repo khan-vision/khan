@@ -10,6 +10,9 @@
    хийхгүй.
 3. Зөвхөн PostgreSQL дэмжинэ.
 4. GraphQL-ийг REST-ээр солино. Apollo-ийн client cache-ийг орлохын тулд `cache` package заавал хийнэ.
+5. Fiber болон GORM үргэлж хамгийн сүүлийн хувилбар дээр байна: Fiber v3, Go 1.26. main ч Fiber v3 руу шилжинэ.
+   Lambda-ийн v2 route-ууд шилжилтийн хугацаанд нэг процесс доторх legacy v2 sidecar app-д ажиллаж, v3-ийн proxy-оор
+   дамжина.
 
 ## Lambda → khan
 

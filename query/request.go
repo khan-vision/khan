@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 // maxBodyBytes — POST /query body-ийн дээд хэмжээ.
@@ -27,10 +27,10 @@ type Request struct {
 }
 
 // FromQuery — Run-ий өмнө нь уншдаг байсан query параметрүүдийг яг адилхан уншина.
-func FromQuery(c *fiber.Ctx) Request {
+func FromQuery(c fiber.Ctx) Request {
 	return Request{
-		Page:    c.QueryInt("page", 1),
-		Limit:   c.QueryInt("limit", 0),
+		Page:    fiber.Query[int](c, "page", 1),
+		Limit:   fiber.Query[int](c, "limit", 0),
 		Search:  c.Query("search"),
 		Sort:    c.Query("sort"),
 		Dir:     c.Query("dir"),
@@ -49,7 +49,7 @@ type bodyReq struct {
 }
 
 // FromBody — POST JSON body-г задална. Буруу JSON / хэт том body → *FilterError (400).
-func FromBody(c *fiber.Ctx) (Request, error) {
+func FromBody(c fiber.Ctx) (Request, error) {
 	return parseBody(c.Body())
 }
 
@@ -88,7 +88,7 @@ func parseBody(body []byte) (Request, error) {
 }
 
 // RequestFrom — POST + body байвал FromBody, бусад үед FromQuery.
-func RequestFrom(c *fiber.Ctx) (Request, error) {
+func RequestFrom(c fiber.Ctx) (Request, error) {
 	if c.Method() == fiber.MethodPost && len(bytes.TrimSpace(c.Body())) > 0 {
 		return FromBody(c)
 	}

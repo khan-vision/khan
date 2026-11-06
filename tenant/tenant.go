@@ -20,7 +20,7 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/gorm"
 )
@@ -38,7 +38,7 @@ const ZeroUUID = "00000000-0000-0000-0000-000000000000"
 var ErrNoOrg = errors.New("байгууллагын мэдээлэл олдсонгүй")
 
 // Claims — c.Locals(LocalsKey)-д байгаа JWT-ийн MapClaims (байхгүй бол ok=false).
-func Claims(c *fiber.Ctx) (jwt.MapClaims, bool) {
+func Claims(c fiber.Ctx) (jwt.MapClaims, bool) {
 	tok, ok := c.Locals(LocalsKey).(*jwt.Token)
 	if !ok || tok == nil {
 		return nil, false
@@ -48,7 +48,7 @@ func Claims(c *fiber.Ctx) (jwt.MapClaims, bool) {
 }
 
 // OrgID — JWT claims доторх org_id. Client-ийн header/query-г огт хардаггүй.
-func OrgID(c *fiber.Ctx) (string, error) {
+func OrgID(c fiber.Ctx) (string, error) {
 	claims, ok := Claims(c)
 	if !ok {
 		return "", ErrNoOrg
@@ -61,7 +61,7 @@ func OrgID(c *fiber.Ctx) (string, error) {
 
 // Require — OrgID; алдаа гарвал 401 `{"error":"Зөвшөөрөлгүй"}` бичээд ok=false.
 // Caller `if !ok { return nil }` гэж шууд буцаана.
-func Require(c *fiber.Ctx) (string, bool) {
+func Require(c fiber.Ctx) (string, bool) {
 	orgID, err := OrgID(c)
 	if err != nil {
 		_ = c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Зөвшөөрөлгүй"})
@@ -72,7 +72,7 @@ func Require(c *fiber.Ctx) (string, bool) {
 
 // Optional — org_id эсвэл "" (алдаа биш). Org-оор заавал хязгаарлах
 // шаардлагагүй цөөн тохиолдолд л; CRUD/жагсаалтад Require-г хэрэглэ.
-func Optional(c *fiber.Ctx) string {
+func Optional(c fiber.Ctx) string {
 	orgID, err := OrgID(c)
 	if err != nil {
 		return ""
@@ -83,7 +83,7 @@ func Optional(c *fiber.Ctx) string {
 // Middleware — org_id-гүй хүсэлтийг 401-ээр зогсоож, org_id-г
 // c.Locals(LocalsOrgID)-д тавина. JWT middleware-ийн ДАРАА бүртгэнэ.
 func Middleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		orgID, ok := Require(c)
 		if !ok {
 			return nil

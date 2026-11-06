@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
 
@@ -96,7 +96,7 @@ func IsFilterError(err error) bool {
 //	resp, err := query.Run(ctx, newQuery, &rows, spec)
 //	if err != nil { return query.Fail(ctx, err) }
 //	return ctx.JSON(resp)
-func Fail(c *fiber.Ctx, err error) error {
+func Fail(c fiber.Ctx, err error) error {
 	if IsFilterError(err) {
 		return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -569,7 +569,7 @@ func (s Spec) filterable() map[string]FilterKind {
 
 // ApplyFilters — `?filters=` JSON-ыг зарласан баганууд дээр query-д тавина.
 // cols хоосон/nil бол query хэвээр буцна (шүүлт хаалттай).
-func ApplyFilters(c *fiber.Ctx, q *gorm.DB, cols map[string]FilterCol) (*gorm.DB, error) {
+func ApplyFilters(c fiber.Ctx, q *gorm.DB, cols map[string]FilterCol) (*gorm.DB, error) {
 	conds, err := Spec{Filters: cols}.parseFilters(c.Query("filters"))
 	if err != nil {
 		return nil, err

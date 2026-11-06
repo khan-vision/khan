@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/khan-vision/khan/config"
 	"github.com/khan-vision/khan/db"
@@ -102,7 +102,7 @@ func Claims(userID, orgID string, role int) jwt.MapClaims {
 // WithClaims — c.Locals(tenant.LocalsKey)-д claims-тай token тавих middleware
 // (JWT гарын үсэг шалгахгүй — handler-ийн unit тестэд).
 func WithClaims(claims jwt.MapClaims) fiber.Handler {
-	return func(c *fiber.Ctx) error {
+	return func(c fiber.Ctx) error {
 		if claims != nil {
 			c.Locals(tenant.LocalsKey, &jwt.Token{Claims: claims, Valid: true})
 		}

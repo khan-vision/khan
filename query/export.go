@@ -20,7 +20,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
@@ -90,7 +90,7 @@ func (ex ExportSpec) Cap() int {
 // ExportXLSX — хүсэлтийн хайлт/шүүлт/эрэмбээр xlsx үүсгэж хариунд бичнэ.
 // Буруу шүүлт → 400 (ямар ч байт бичихээс ӨМНӨ). newQuery нь Run-тэй адил
 // org_id-тай ФРЕШ query буцаана.
-func ExportXLSX(c *fiber.Ctx, req Request, newQuery func() *gorm.DB, spec Spec, ex ExportSpec) error {
+func ExportXLSX(c fiber.Ctx, req Request, newQuery func() *gorm.DB, spec Spec, ex ExportSpec) error {
 	ex.Validate()
 	p, err := spec.prepare(req)
 	if err != nil {
@@ -138,7 +138,7 @@ func rowIter(rows *sql.Rows, n int) func() ([]interface{}, bool, error) {
 
 // sendXLSX — файлыг buffer-т бүтээгээд (мөрийн тоо header-т орох ёстой тул)
 // header-үүдтэй нь хариунд илгээнэ. Хэмжээ нь HardMaxExportRows-оор хязгаартай.
-func sendXLSX(c *fiber.Ctx, ex ExportSpec, next func() ([]interface{}, bool, error)) error {
+func sendXLSX(c fiber.Ctx, ex ExportSpec, next func() ([]interface{}, bool, error)) error {
 	var buf bytes.Buffer
 	written, truncated, err := writeXLSXSheet(&buf, ex.Sheet, ex.Columns, next, ex.Cap())
 	if err != nil {

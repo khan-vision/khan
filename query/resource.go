@@ -18,7 +18,7 @@ package query
 import (
 	"github.com/khan-vision/khan/tenant"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
 )
 
@@ -32,15 +32,15 @@ type Resource struct {
 	// DB — bulk exec-ийн DB. query нь глобал DB ашигладаггүй (DB-гүй тест)
 	// тул Bulk өгсөн бол caller `func() *gorm.DB { return DB.DB }` заавал өгнө.
 	DB       func() *gorm.DB
-	Can      func(c *fiber.Ctx) map[string]bool // optional → list response gets "can"
-	CanWrite func(c *fiber.Ctx) bool            // bulk gate; nil → deny (403)
-	NewRows  func() interface{}                 // &[]Row{}; nil → *[]map[string]interface{}
+	Can      func(c fiber.Ctx) map[string]bool // optional → list response gets "can"
+	CanWrite func(c fiber.Ctx) bool            // bulk gate; nil → deny (403)
+	NewRows  func() interface{}                // &[]Row{}; nil → *[]map[string]interface{}
 	// Org — JWT-ээс org_id унших (401-г өөрөө бичнэ). nil → tenant.Require
 	// (orgctx.Require-тэй ижил дүрэм). Production-д orgctx.Require өгөхийг зөвлөнө.
-	Org func(c *fiber.Ctx) (string, bool)
+	Org func(c fiber.Ctx) (string, bool)
 }
 
-func (r Resource) org(c *fiber.Ctx) (string, bool) {
+func (r Resource) org(c fiber.Ctx) (string, bool) {
 	if r.Org != nil {
 		return r.Org(c)
 	}
@@ -52,7 +52,7 @@ func (r Resource) queryFor(orgID string) func() *gorm.DB {
 }
 
 // List — GET (query string) ба POST /query (JSON body).
-func (r Resource) List(c *fiber.Ctx) error {
+func (r Resource) List(c fiber.Ctx) error {
 	orgID, ok := r.org(c)
 	if !ok {
 		return nil
@@ -78,7 +78,7 @@ func (r Resource) List(c *fiber.Ctx) error {
 }
 
 // ExportXLSX — GET /export.xlsx (list-тэй ижил query параметр).
-func (r Resource) ExportXLSX(c *fiber.Ctx) error {
+func (r Resource) ExportXLSX(c fiber.Ctx) error {
 	if r.Export == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Олдсонгүй"})
 	}
@@ -94,7 +94,7 @@ func (r Resource) ExportXLSX(c *fiber.Ctx) error {
 }
 
 // BulkHandler — POST /bulk → {"affected": n}.
-func (r Resource) BulkHandler(c *fiber.Ctx) error {
+func (r Resource) BulkHandler(c fiber.Ctx) error {
 	if r.Bulk == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Олдсонгүй"})
 	}

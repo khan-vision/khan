@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -52,13 +52,13 @@ func runWith(t *testing.T, spec Spec, query string) (fiber.Map, error, []string)
 	app := fiber.New()
 	var resp fiber.Map
 	var runErr error
-	app.Get("/list", func(c *fiber.Ctx) error {
+	app.Get("/list", func(c fiber.Ctx) error {
 		var rows []map[string]interface{}
 		resp, runErr = Run(c, newQuery, &rows, spec)
 		return c.SendString("ok")
 	})
 	req := httptest.NewRequest("GET", "/list?"+query, nil)
-	if _, err := app.Test(req, -1); err != nil {
+	if _, err := app.Test(req, noTimeout); err != nil {
 		t.Fatalf("fiber test алдаа: %v", err)
 	}
 	_ = built

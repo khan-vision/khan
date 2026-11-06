@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -30,13 +30,13 @@ func TestOrgID_OnlyFromJWT(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			app := fiber.New()
 			var got string
-			app.Use(func(c *fiber.Ctx) error {
+			app.Use(func(c fiber.Ctx) error {
 				if tc.claims != nil {
 					c.Locals("user", &jwt.Token{Claims: tc.claims})
 				}
 				return c.Next()
 			})
-			app.Get("/", func(c *fiber.Ctx) error {
+			app.Get("/", func(c fiber.Ctx) error {
 				org, ok := Require(c)
 				if !ok {
 					return nil
@@ -94,13 +94,13 @@ func TestScope(t *testing.T) {
 
 func TestMiddleware(t *testing.T) {
 	app := fiber.New()
-	app.Use(func(c *fiber.Ctx) error {
+	app.Use(func(c fiber.Ctx) error {
 		if c.Get("X-Test-Token") == "1" {
 			c.Locals(LocalsKey, &jwt.Token{Claims: jwt.MapClaims{"org_id": "org-A"}})
 		}
 		return c.Next()
 	}, Middleware())
-	app.Get("/", func(c *fiber.Ctx) error { return c.SendString(c.Locals(LocalsOrgID).(string)) })
+	app.Get("/", func(c fiber.Ctx) error { return c.SendString(c.Locals(LocalsOrgID).(string)) })
 
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("X-Org-ID", "org-B")
