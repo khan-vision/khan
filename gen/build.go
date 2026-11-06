@@ -228,6 +228,15 @@ func (b *builder) build() (*crud.Resource[map[string]any], error) {
 	return r, nil
 }
 
+// isIntUDT — pg_type.typname нь бүхэл тоон төрөл эсэх.
+func isIntUDT(udt string) bool {
+	switch strings.ToLower(udt) {
+	case "int2", "int4", "int8", "serial", "serial4", "bigserial", "serial8":
+		return true
+	}
+	return false
+}
+
 // buildChildren — формын SubForm-уудыг Children болгоно.
 func (b *builder) buildChildren(r *crud.Resource[map[string]any], parent scope) {
 	if b.form == nil {
@@ -262,11 +271,25 @@ func (b *builder) buildChild(r *crud.Resource[map[string]any], parent scope, lf 
 		idCol = pk[0]
 	}
 	if idCol == "" {
-		skip(ct.QualifiedName() + ": PK ганц баганатай биш")
+		skip(ct.QualifiedName() + ": PK ганц баганатай биш (PK-гүй хүснэгтийг crud child дэмжихгүй)")
 		return
 	}
-	if ic := ct.Column(idCol); ic == nil || !strings.EqualFold(ic.UDT, "uuid") {
-		skip(ct.QualifiedName() + ": child ID зөвхөн uuid байж болно")
+	idKind := crud.IDUUID
+	ic := ct.Column(idCol)
+	switch {
+	case ic == nil:
+		skip(fmt.Sprintf("%s: PK багана %q алга", ct.QualifiedName(), idCol))
+		return
+	case strings.EqualFold(ic.UDT, "uuid"):
+	case isIntUDT(ic.UDT):
+		// legacy subform (public.sub_*): int2/int4/int8 PK — id-г DB өгнө (INSERT-д id тавихгүй)
+		if ic.Default == nil && !ic.Identity {
+			skip(fmt.Sprintf("%s: int PK %q-д DB default/identity (sequence) алга — шинэ мөр нэмэх боломжгүй", ct.QualifiedName(), idCol))
+			return
+		}
+		idKind = crud.IDInt
+	default:
+		skip(fmt.Sprintf("%s: child ID (%s) төрөл %s — зөвхөн uuid эсвэл int байж болно", ct.QualifiedName(), idCol, ic.Type))
 		return
 	}
 	if r.Timestamps == nil && !(ct.HasColumn("created_at") && ct.HasColumn("updated_at")) {
@@ -293,7 +316,7 @@ func (b *builder) buildChild(r *crud.Resource[map[string]any], parent scope, lf 
 
 	ch := crud.Child{
 		Name: name, Label: firstNonEmpty(strings.Join(strings.Fields(string(lf.Name)), " "), humanize(name)),
-		Table: ct.QualifiedName(), FK: lf.Parent, ID: crud.IDSpec{Column: idCol, Kind: crud.IDUUID},
+		Table: ct.QualifiedName(), FK: lf.Parent, ID: crud.IDSpec{Column: idCol, Kind: idKind},
 		SoftDelete: ct.HasColumn("deleted_at"),
 	}
 	if ct.HasColumn("sort_order") {

@@ -324,14 +324,16 @@ func (g *oaGen) schemas() obj {
 		cp, _ := pascalOf("x." + c.Name) // plan-д шалгагдсан биш: доор алдааг барина
 		reqProps, req := g.writeObject(c.Fields, true, false)
 		idKey := childIDColumn(c)
-		reqProps[idKey] = obj{"type": "string", "format": "uuid", "description": "Байгаа мөрийг засахад; байхгүй бол шинэ мөр"}
+		idIn := idSchema(c.ID.Kind)
+		idIn["description"] = "Байгаа мөрийг засахад; байхгүй бол шинэ мөр"
+		reqProps[idKey] = idIn
 		in := obj{"type": "object", "properties": reqProps, "description": c.Label}
 		if len(req) > 0 {
 			in["required"] = req
 		}
 		out[p+cp+"Input"] = in
 		rowProps, _ := g.writeObject(c.Fields, false, false)
-		rowProps[idKey] = obj{"type": "string", "format": "uuid"}
+		rowProps[idKey] = idSchema(c.ID.Kind)
 		out[p+cp] = obj{"type": "object", "description": c.Label, "required": []any{idKey}, "properties": rowProps, "additionalProperties": true}
 	}
 

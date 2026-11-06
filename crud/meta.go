@@ -125,7 +125,7 @@ func (e *engine) meta() Meta {
 		cp := &e.children[i]
 		m.Children = append(m.Children, ChildMeta{
 			Name: cp.Name, Label: cp.label, MaxRows: cp.maxRows, Fields: e.fieldMetas(cp.fields),
-			ID: IDMeta{Column: cp.idCol, Kind: IDUUID},
+			ID: IDMeta{Column: cp.idCol, Kind: cp.idKind},
 		})
 	}
 	return m

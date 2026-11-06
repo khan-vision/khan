@@ -79,6 +79,10 @@ func newSfx(t *testing.T) *sfx {
 	f.exec(`CREATE TABLE ` + s + `.kind_item (
 		id uuid PRIMARY KEY, org_id uuid, kind_id uuid NOT NULL REFERENCES ` + s + `.kind(id), label text NOT NULL,
 		created_at timestamptz, updated_at timestamptz, deleted_at timestamptz)`)
+	// IDInt child хүснэгтүүд (bigserial / int4 serial): kind_note — org_id nullable (shared), country_tag — org_id алга.
+	f.exec(`CREATE TABLE ` + s + `.kind_note (
+		id bigserial PRIMARY KEY, org_id uuid, kind_id uuid NOT NULL REFERENCES ` + s + `.kind(id), body text NOT NULL,
+		created_at timestamptz, updated_at timestamptz, deleted_at timestamptz)`)
 	f.exec(`CREATE TABLE ` + s + `.grp (id uuid PRIMARY KEY, org_id uuid, name text NOT NULL)`)
 	f.exec(`CREATE TABLE ` + s + `.owner (id uuid PRIMARY KEY, org_id uuid NOT NULL, name text NOT NULL)`)
 	// Global хүснэгтүүд: org_id БАЙХГҮЙ.
@@ -88,7 +92,10 @@ func newSfx(t *testing.T) *sfx {
 	f.exec(`CREATE TABLE ` + s + `.country_city (
 		id uuid PRIMARY KEY, country_id uuid NOT NULL REFERENCES ` + s + `.country(id), name text NOT NULL,
 		created_at timestamptz, updated_at timestamptz, deleted_at timestamptz)`)
-	names := []string{s + ".kind", s + ".kind_item", s + ".grp", s + ".owner"}
+	f.exec(`CREATE TABLE ` + s + `.country_tag (
+		tag_id serial PRIMARY KEY, country_id uuid NOT NULL REFERENCES ` + s + `.country(id), name text NOT NULL,
+		created_at timestamptz, updated_at timestamptz)`)
+	names := []string{s + ".kind", s + ".kind_item", s + ".kind_note", s + ".grp", s + ".owner"}
 	if err := db.Use(tenant.NewGuardFor(names, tenant.GuardStrict, func(format string, a ...any) { t.Errorf(format, a...) })); err != nil {
 		t.Fatal(err)
 	}

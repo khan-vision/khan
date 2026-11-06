@@ -130,6 +130,21 @@ export interface ConferenceRoomEquipmentRow {
   unit_price: number
 }
 
+/** Холбоо барих — мөр (хүсэлт). `row_id` байвал засна, байхгүй бол шинээр нэмнэ. */
+export interface ConferenceRoomContactsPayload {
+  /** Байгаа мөрийн id */
+  row_id?: number
+  /** Утас */
+  phone: string
+}
+
+/** Холбоо барих — мөр (хариу). */
+export interface ConferenceRoomContactsRow {
+  row_id: number
+  /** Утас */
+  phone: string
+}
+
 /** Хурлын өрөө — үүсгэх хүсэлт. */
 export interface ConferenceRoomPayload {
   /** Нэр */
@@ -172,6 +187,8 @@ export interface ConferenceRoomPayload {
   note?: string | null
   /** Тоног төхөөрөмж: бүрэн жагсаалт (түлхүүр алга бол өөрчлөгдөхгүй) */
   equipment?: ConferenceRoomEquipmentPayload[]
+  /** Холбоо барих: бүрэн жагсаалт (түлхүүр алга бол өөрчлөгдөхгүй) */
+  contacts?: ConferenceRoomContactsPayload[]
 }
 
 /** Хурлын өрөө — засах хүсэлт (хэсэгчилсэн; version заавал). */
@@ -219,6 +236,7 @@ export interface ConferenceRoomRow {
   /** Тэмдэглэл */
   note: string | null
   equipment: ConferenceRoomEquipmentRow[]
+  contacts: ConferenceRoomContactsRow[]
   created_at?: string | null
   updated_at?: string | null
   deleted_at?: string | null
@@ -231,6 +249,11 @@ export const conferenceRoomEquipmentSchema = z.object({
   item_id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, "Бараа: id буруу"),
   qty: z.number().int("Тоо: бүхэл тоо оруулна уу").min(1, "Тоо: 1-аас багагүй байна"),
   unit_price: khanDecimal("Нэгж үнэ", 2),
+})
+
+export const conferenceRoomContactsSchema = z.object({
+  row_id: z.number().int().positive("row_id буруу").optional(),
+  phone: z.string(),
 })
 
 export const conferenceRoomSchema = z.strictObject({
@@ -254,6 +277,7 @@ export const conferenceRoomSchema = z.strictObject({
   manager_id: z.string().regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, "Менежер: id буруу").nullable().optional(),
   note: z.string().nullable().optional(),
   equipment: z.array(conferenceRoomEquipmentSchema).max(50, "Тоног төхөөрөмж: хамгийн ихдээ 50 мөр").optional(),
+  contacts: z.array(conferenceRoomContactsSchema).max(10, "Холбоо барих: хамгийн ихдээ 10 мөр").optional(),
 })
 
 export const conferenceRoomUpdateSchema = conferenceRoomSchema.partial().omit({ secret: true, note: true }).extend({ version: z.number().int().min(0) })
@@ -284,6 +308,16 @@ export const conferenceRoomEquipmentFields: KvFieldDef[] = [
     rules: [
       khanRange("Нэгж үнэ", 2),
     ],
+  },
+]
+
+/** KvForm талбарууд (KvFieldDef[]). */
+export const conferenceRoomContactsFields: KvFieldDef[] = [
+  {
+    name: "phone",
+    label: "Утас",
+    type: "phone",
+    required: true,
   },
 ]
 

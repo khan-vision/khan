@@ -209,7 +209,8 @@ type Child struct {
 // DB-д байгаа боловч массивт ороогүй → delete (SoftDelete бол deleted_at). Массив body-д огт байхгүй (key алга ЭСВЭЛ null)
 // бол children өөрчлөгдөхгүй; `[]` бол бүгдийг устгана. Create-д мөрийн id үл тооно. Эцгийг hard delete хийхэд
 // бүх child мөр (soft эсэхээс үл хамааран) эхлээд устна; soft delete-д child хөндөгдөхгүй.
-// Хязгаарлалт: child ID зөвхөн UUID; child талбарт `Unique` дэмжигдэхгүй (Mount алдаа); nested children байхгүй.
+// Child id: `Child.ID IDSpec` — IDUUID (анхдагч) эсвэл IDInt (serial/identity, DB өгнө; payload-д эерэг int64 тоо эсвэл цифртэй мөр,
+// хариунд JSON тоо; PK-гүй хүснэгт дэмжигдэхгүй; Shared/Global scope-д ч ажиллана — child-ийн эзэмшигч эцгийг дагана, id нь эцэг+эзэмшигчид хамаарах эсэх шалгагдана). Хязгаарлалт: child талбарт `Unique` дэмжигдэхгүй (Mount алдаа); nested children байхгүй.
 
 type Ctx struct {
     Fiber    fiber.Ctx
@@ -409,7 +410,7 @@ DateTime→datetime, Time→time, Enum→select (`options`), Phone→phone, Pass
 дутуу түлхүүрийг шалгадаггүй), `meta: unknown`.
 
 Мэдэгдэж буй хязгаар: Go (RE2) pattern-ийг JS RegExp болгоно (`(?i)` flag, `(?P<` хөрвүүлнэ; `\A \z \Q \C [[:class:]]` → алдаа);
-`Ref.Parent` (cascade) нь `KvFieldDef`-д илэрхийлэгдэхгүй; child `id` багана `"id"` гэж үзнэ (`ChildMeta` нэр өгдөггүй).
+`Ref.Parent` (cascade) нь `KvFieldDef`-д илэрхийлэгдэхгүй; child id-ийн багана/төрөл `ChildMeta.ID`-аас (IDInt → `number`/zod `int().positive()`/OpenAPI `integer`).
 
 **OpenAPI 3.1:** resource бүрийн route бүр (`GET|POST <ep>`, `POST /query`, `GET /export.xlsx` (Export), `POST /bulk` (Bulk),
 `GET /options/{field}` (Ref байвал; `field` enum), `GET|PUT|DELETE /{id}`, `GET /meta` — `Info.MetaRoutes`), schema (`<P>`, `<P>Create`,
@@ -453,7 +454,7 @@ Cleanup: үүсгэсэн мөрийг API-аар (DELETE) устгана (best 
 | 5 | `lookup.Spec.Kind`, `Spec.Validate()`, `ValidateWhere`, `TenantOff()`; `Search` nil үед Label-ийн нэгдсэн мөрөөр хайна | uuid/int баганад буруу утга DB алдаа (500) болохоос сэргийлэх; "Овог Нэр" хайлт |
 | 6 | `validate.Parse`-ийн present/хоосон утгын дүрэм тодорхой болсон (§4); `Min/Max` decimal-аар харьцуулна; `Bound`, `NewErrors/Merge/Len` | Спек "present"-ийг тодорхойлоогүй байсан; float харьцуулалт `0.1`-д алдаатай |
 | 7 | Money/Number-ийг хариунд яг цифртэй JSON тоо болгож буцаана (supplemental `CAST(col AS text)` уншилт) | pgx numeric-г float64 болгодог — 9999999999999999.99 нь 1e16 болж алдагддаг байсан |
-| 8 | Child алдааны түлхүүр `lines.0.qty`; child null → өөрчлөхгүй; child `Unique` дэмжигдэхгүй; child ID зөвхөн UUID | UForm нэршил; null-ээр санамсаргүй бүгдийг устгахаас сэргийлэх; unique-ийн хүрээ тодорхойгүй |
+| 8 | Child алдааны түлхүүр `lines.0.qty`; child null → өөрчлөхгүй; child `Unique` дэмжигдэхгүй; child ID = UUID эсвэл `IDInt` (DB serial/identity, INSERT-д id тавихгүй; payload id эерэг int64, буруу/халилт/0/сөрөг → 422 `<child>.<i>.<id>`, int4 баганад `CAST(? AS bigint)`; PK-гүй хүснэгт үгүй) | UForm нэршил; null-ээр санамсаргүй бүгдийг устгахаас сэргийлэх; unique-ийн хүрээ тодорхойгүй |
 | 9 | `Resource.Check()`, `Meta` нь DB/Can-гүйгээр; `Meta.Ref.Options` URL; `crud.Off()/On()`; `NotFound(msg)` | codegen offline ажиллах ёстой |
 | 10 | RLS: бүх зам `tenant.Tx` дотор (жагсаалт/export/options-ийг review-ийн дараа нэмсэн) | Strict policy-д `app.org_id`-гүй query хоосон гардаг |
 | 11 | `gorm.ErrRecordNotFound` hook-оос 404 БИШ 500; hook 404 хүсвэл `crud.NotFound` | Hook доторх санамсаргүй `First()` алдааг "мөр олдсонгүй" гэж буруу ойлгуулахгүй |
@@ -469,11 +470,6 @@ Cleanup: үүсгэсэн мөрийг API-аар (DELETE) устгана (best 
 | 21 | Decimal: Row `number`, Payload `number \| string` (zod union + scale/range шалгалт) | Хариу нь яг цифртэй JSON тоо, хүсэлт тоо эсвэл мөр (§6) |
 | 22 | `Resource.Cache` (`CacheSpec`): унших 4 endpoint-ийн org-тусгаарлагдсан generation cache + ETag/304, бичилт commit-ийн дараа bump | GraphQL/apollo client cache-ийг орлоно; `can` cache-д ордоггүй, read эрх cache-ээс өмнө; 4xx/5xx cache-д ордоггүй; `ListQuery` нь хэрэглэгчээс хамаарсан бол Cache тавихгүй. [docs/CACHE.md](CACHE.md) |
 | 23 | `Resource.Audit` (`AuditSpec`): create/update/delete/bulk бүрийг `khan.audit_log`-д бизнес транзакцдаа (old → new, зөвхөн өөрчлөгдсөн талбар) бичнэ; Password хэзээ ч бичигдэхгүй; audit бичилт унавал бүх бичилт буцна | `crudlogger` нь үйлдлийн гадна, түүхий input бичдэг байсан. [docs/AUDIT.md](AUDIT.md) |
-
-**Unique-ийн шаардлага:** `Unique: true` талбар нь апп түвшний шалгалт (TOCTOU) тул DB-д заавал
-`UNIQUE (org_id, col) [WHERE deleted_at IS NULL]` index байх ёстой — org_id-гүй global index бусад байгууллагад тухайн
-утга байгааг 409-оор илчилнэ. **Options:** `/options/:field` нь resource-ийг унших эрхтэй хэрэглэгчид ref хүснэгтийн
-label-ийг (тухайн org-ийнхыг л) харуулна — ref хүснэгтийн өөрийн эрхийг шалгахгүй.
 | 24 | `Resource.Scope` (`ScopeTenant` zero/анхдагч, `ScopeShared`, `ScopeGlobal`), `SystemCan`, `GlobalWrites`; §2.1 | ORG_ID_GAPS: 2 hybrid + 27 global хүснэгт crud-д орох боломжгүй байсан |
 | 25 | Shared: системийн мөр tenant-д унших-л → **403** (404 биш: мөр харагдаж байна); bulk-д системийн мөр байвал бүтэн хүсэлт 403; sysadmin ч bulk-аар системийн мөр засахгүй | Хэсэгчилсэн/чимээгүй амжилт болохгүй, UX тодорхой |
 | 26 | Shared: системийн мөр `POST /system` (тусдаа route, body flag БИШ); `Ctx.System`; ref нь org-д хамааралгүй байх ёстой | Санамсаргүй NULL org_id үүсэхээс сэргийлэх; org хоорондын холбоос |
@@ -481,3 +477,8 @@ label-ийг (тухайн org-ийнхыг л) харуулна — ref хүс�
 | 28 | Audit/event нь үйлдэл хийгчийн org-д (audit.org_id NOT NULL); Global event payload-д org_id алга | Audit схем, бусад org-ийн түүх ил гарахгүй |
 | 29 | `tenant.SharedCond`, `tenant.SystemRow`, Guard-ийн shared нөхцөл таних, `PolicyOptions.SystemRows` (унших `FOR SELECT` policy), `lookup.Spec.Shared`/`TenantScoped()`, `query.BulkSpec.NoOrg` | Hybrid хүснэгтийг Guard/RLS/lookup/bulk-д үнэнчээр дэмжих |
 | 30 | `Shared + SystemCan + RLS` Mount алдаа; Global + RLS/Cache.DependsOn/tenant Ref Mount алдаа | Системийн мөр бичихэд RLS bypass хэрэгтэй (бүтэн транзакцыг bypass-д оруулахгүй); Global кэш нь org хооронд холилдох эрсдэл |
+
+**Unique-ийн шаардлага:** `Unique: true` талбар нь апп түвшний шалгалт (TOCTOU) тул DB-д заавал
+`UNIQUE (org_id, col) [WHERE deleted_at IS NULL]` index байх ёстой — org_id-гүй global index бусад байгууллагад тухайн
+утга байгааг 409-оор илчилнэ. **Options:** `/options/:field` нь resource-ийг унших эрхтэй хэрэглэгчид ref хүснэгтийн
+label-ийг (тухайн org-ийнхыг л) харуулна — ref хүснэгтийн өөрийн эрхийг шалгахгүй.

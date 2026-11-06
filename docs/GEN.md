@@ -79,7 +79,7 @@ Timestamps/money зөрчил нь мэдээллийн шинжтэй (комм
 | `hidden` | `CreateOnly` (анхдагч) / keep / exclude |
 | `disabled` | `CreateOnly` |
 | `fillByUserField` | талбар хасагдаж `TODO [fill-by-user]` (Hooks.BeforeCreate-д JWT-ээс) |
-| SubForm | `Children` (`model`=Name, `parent`=FK); child хүснэгт org_id/uuid PK/timestamps шаарддаг, үгүй бол `TODO [subform]` |
+| SubForm | `Children` (`model`=Name, `parent`=FK); child хүснэгт org_id/ганц PK (uuid, эсвэл int2/int4/int8 + default/identity → `IDInt`)/timestamps шаарддаг (PK-гүй, default-гүй int PK, бусад төрөл → `TODO [subform]`), үгүй бол `TODO [subform]` |
 | `triggers` insert/update before/after | `TODO [trigger]` → Hooks.* |
 | `formula`, `equations` | UI-only (hidden/disabled/required) → `TODO [show-hide]`; бусад → `TODO [formula]` |
 | талбарын `trigger`, `ifshowhide`, custom formType, `extraButtons`, `step`, `email` | `TODO` (field-trigger / show-hide / custom-element / form-feature) |
