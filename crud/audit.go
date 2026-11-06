@@ -131,7 +131,7 @@ func (e *engine) auditVisible(_ fiber.Ctx, tx *gorm.DB, orgID, recordID string) 
 		return false, nil
 	}
 	// Амьд мөр (харагдахгүй байсан) байвал нуух; байхгүй эсвэл soft-delete хийгдсэн бол зөвшөөрнө.
-	q := tx.Table(e.table).Select("1 AS one").Where("org_id = ?", orgID).
+	q := e.readWhere(tx.Table(e.table).Select("1 AS one"), "", orgID).
 		Where(quote(e.idCol)+" = "+e.idParam(), idVal)
 	if e.softDelete {
 		q = q.Where("deleted_at IS NULL")
@@ -170,8 +170,8 @@ func (e *engine) auditStates(tx *gorm.DB, orgID string, ids []any, withChildren 
 	if len(ids) == 0 {
 		return out, nil
 	}
-	q := tx.Table(e.table).Select(append([]string{"*"}, decimalSelect(e.fields)...)).
-		Where("org_id = ?", orgID).Where(quote(e.idCol)+" IN ?", ids)
+	q := e.readWhere(tx.Table(e.table).Select(append([]string{"*"}, decimalSelect(e.fields)...)), "", orgID).
+		Where(quote(e.idCol)+" IN ?", ids)
 	if e.softDelete {
 		q = q.Where("deleted_at IS NULL")
 	}

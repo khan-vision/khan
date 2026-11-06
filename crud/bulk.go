@@ -14,6 +14,9 @@ import (
 // lockBulkIDs — хүсэлтийн id-уудаас ЗӨВХӨН тухайн org-ийн (soft-delete хийгдээгүй) мөрийг
 // `FOR UPDATE`-ээр түгжиж, тэдгээрийн id-г буцаана. Өөр org-ийн id чимээгүй алгасагдана
 // (ExecBulk-тэй ижил нөхцөл) — version/updated_at/event зөвхөн эдгээрт.
+//
+// ScopeShared: харагдах мөрийн дунд системийн (org_id IS NULL) мөр байвал БҮТЭН хүсэлт 403
+// (юу ч өөрчлөгдөхгүй) — системийн мөр зөвхөн PUT/DELETE /:id-ээр (SystemCan) удирдагдана.
 func (e *engine) lockBulkIDs(tx *gorm.DB, orgID string, raw []string) ([]any, error) {
 	ids := make([]any, 0, len(raw))
 	for _, s := range raw {
@@ -30,7 +33,10 @@ func (e *engine) lockBulkIDs(tx *gorm.DB, orgID string, raw []string) ([]any, er
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := tx.Table(e.table).Select(quote(e.idCol)+" AS id").Where("org_id = ?", orgID)
+	q := e.readWhere(tx.Table(e.table).Select(quote(e.idCol)+" AS id"), "", orgID)
+	if e.scope == ScopeShared {
+		q = q.Select(quote(e.idCol) + " AS id, org_id")
+	}
 	if e.idKind == IDInt {
 		// int4 баганад int4-өөс их id encode алдаа (500) өгөхгүйн тулд bigint-ээр харьцуулна.
 		q = q.Where(quote(e.idCol)+" IN ("+strings.TrimSuffix(strings.Repeat("CAST(? AS bigint),", len(ids)), ",")+")", ids...)
@@ -46,6 +52,13 @@ func (e *engine) lockBulkIDs(tx *gorm.DB, orgID string, raw []string) ([]any, er
 	}
 	out := make([]any, 0, len(rows))
 	for _, r := range rows {
+		if e.scope == ScopeShared {
+			if o, err := e.rowOwner(orgID, r); err != nil {
+				return nil, err
+			} else if o.system {
+				return nil, Forbidden(msgSystemRow)
+			}
+		}
 		out = append(out, r["id"])
 	}
 	return out, nil
@@ -71,7 +84,7 @@ func (e *engine) afterBulk(c fiber.Ctx, tx *gorm.DB, orgID string, req query.Bul
 			upd[e.versionCol] = gorm.Expr(quote(e.versionCol) + " + 1")
 		}
 		if len(upd) > 0 {
-			err := tx.Table(e.table).Where("org_id = ?", orgID).Where(quote(e.idCol)+" IN ?", ids).
+			err := e.ownWhere(tx.Table(e.table), "", owner{org: orgID}).Where(quote(e.idCol)+" IN ?", ids).
 				Updates(upd).Error
 			if err != nil {
 				return err
@@ -91,7 +104,7 @@ func (e *engine) afterBulk(c fiber.Ctx, tx *gorm.DB, orgID string, req query.Bul
 		}
 	}
 	for _, id := range ids {
-		if err := e.publish(tx, orgID, suffix, fmt.Sprint(id), vals); err != nil {
+		if err := e.publish(tx, owner{org: orgID}, suffix, fmt.Sprint(id), vals); err != nil {
 			return err
 		}
 	}

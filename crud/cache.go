@@ -98,15 +98,40 @@ func compileCache(name string, s *CacheSpec) (*cachePlan, error) {
 // bumpCache — write транзакц амжилттай COMMIT болсны ДАРАА дуудагдана (commit-оос өмнө bump хийвэл
 // зэрэгцээ уншигч хуучин өгөгдлийг шинэ generation-д хадгалж болно). Handler-ийн timeout дууссан ч
 // bump хийгдэхийн тулд цуцлалтаас салгаж өөрийн богино хугацаатай ажиллана. Алдаа → лог (TTL хязгаарлана).
-func (e *engine) bumpCache(c fiber.Ctx, orgID string) {
+//
+// ScopeGlobal: generation нь тогтмол `_global` namespace-д. ScopeShared-ийн системийн мөрийн бичилт нь
+// өөрийн org-ийн generation-д нэмээд `_system` namespace-ийг bump хийнэ — Shared resource бүрийн
+// унших түлхүүр/ETag энэ generation-ийг агуулдаг тул бүх org-ийн cache хүчингүй болно.
+func (e *engine) bumpCache(c fiber.Ctx, o owner) {
 	if e.cache == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Context()), 5*time.Second)
 	defer cancel()
-	if err := e.cache.c.Bump(ctx, orgID, e.cache.bumpNames...); err != nil {
-		obs.With(c).Error("crud: cache bump амжилтгүй (хуучирсан өгөгдөл TTL хүртэл үлдэж болно)", "resource", e.name, "err", err)
+	orgs := []string{e.cacheOrg(o.org)}
+	if o.system {
+		orgs = append(orgs, systemCacheOrg)
 	}
+	for _, org := range orgs {
+		if err := e.cache.c.Bump(ctx, org, e.cache.bumpNames...); err != nil {
+			obs.With(c).Error("crud: cache bump амжилтгүй (хуучирсан өгөгдөл TTL хүртэл үлдэж болно)", "resource", e.name, "err", err)
+		}
+	}
+}
+
+// systemPart — ScopeShared resource-ийн cache түлхүүрийн нэмэлт хэсэг: `_system` namespace-ийн
+// generation (resource + DependsOn). Системийн мөр өөрчлөгдөхөд бүх org-ийн түлхүүр өөрчлөгдөнө.
+// Tenant/Global-д хоосон (түлхүүр өөрчлөгдөхгүй).
+func (e *engine) systemPart(ctx context.Context) (string, error) {
+	if e.scope != ScopeShared {
+		return "", nil
+	}
+	names := append([]string{e.name}, e.cache.dependsOn...)
+	v, err := e.cache.c.Version(ctx, systemCacheOrg, names...)
+	if err != nil {
+		return "", err
+	}
+	return "sys=" + v, nil
 }
 
 // relayErr — аль хэдийн бичигдсэн (200 биш) хариуг cache-д хийхгүйгээр дамжуулах алдаа
@@ -205,7 +230,15 @@ func (e *engine) serveCached(c fiber.Ctx, orgID string, parts []string, can map[
 	compute func(ctx context.Context) ([]byte, error), decorate func(body []byte) ([]byte, error)) error {
 	cp := e.cache
 	ctx := c.Context()
-	res, err := cp.c.Resolve(ctx, cache.Key{OrgID: orgID, Resource: e.name, DependsOn: cp.dependsOn, Parts: parts})
+	orgID = e.cacheOrg(orgID) // Global: бүх org-д хуваалцсан namespace
+	sys, err := e.systemPart(ctx)
+	var res cache.Resolved
+	if err == nil {
+		if sys != "" {
+			parts = append(parts[:len(parts):len(parts)], sys)
+		}
+		res, err = cp.c.Resolve(ctx, cache.Key{OrgID: orgID, Resource: e.name, DependsOn: cp.dependsOn, Parts: parts})
+	}
 	if err != nil {
 		// Generation уншигдсангүй → cache-гүй (fail-open), ETag тавихгүй.
 		obs.With(c).Warn("crud: cache алгасав", "resource", e.name, "err", err)

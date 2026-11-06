@@ -56,16 +56,16 @@ func (e *commitError) Unwrap() error { return e.err }
 
 func (e *engine) allowed(c fiber.Ctx, a Action) bool { return e.can != nil && e.can(c, a) }
 
-func (e *engine) ctx(c fiber.Ctx, tx *gorm.DB, orgID, uid string, a Action, id string, old map[string]any) *Ctx {
-	return &Ctx{Fiber: c, Tx: tx, OrgID: orgID, UserID: uid, Action: a, ID: id, Old: old, Resource: e.name}
+func (e *engine) ctx(c fiber.Ctx, tx *gorm.DB, o owner, uid string, a Action, id string, old map[string]any) *Ctx {
+	return &Ctx{Fiber: c, Tx: tx, OrgID: o.org, UserID: uid, Action: a, ID: id, Old: old, Resource: e.name, System: o.system}
 }
 
 // runValidate — cross-field Validate: validate.Errors → errs-д нэгтгэнэ, бусад алдаа буцна.
-func (e *engine) runValidate(c fiber.Ctx, orgID, uid string, a Action, id string, old map[string]any, vals Values, errs validate.Errors) error {
+func (e *engine) runValidate(c fiber.Ctx, o owner, uid string, a Action, id string, old map[string]any, vals Values, errs validate.Errors) error {
 	if e.validate == nil {
 		return nil
 	}
-	err := e.validate(e.ctx(c, nil, orgID, uid, a, id, old), vals)
+	err := e.validate(e.ctx(c, nil, o, uid, a, id, old), vals)
 	var ve validate.Errors
 	switch {
 	case err == nil:
@@ -77,8 +77,9 @@ func (e *engine) runValidate(c fiber.Ctx, orgID, uid string, a Action, id string
 	return err
 }
 
-// checkRefs — parent талбаруудын Ref утгууд тухайн org-д байгаа эсэх.
-func (e *engine) checkRefs(tx *gorm.DB, orgID string, vals Values, errs validate.Errors) error {
+// checkRefs — parent талбаруудын Ref утгууд тухайн org-д байгаа эсэх. Системийн мөр (бүх org-д
+// харагдана) org-ийн лавлах мөр руу заах боломжгүй (өөр org-д салсан/алдагдсан холбоос болно).
+func (e *engine) checkRefs(tx *gorm.DB, o owner, vals Values, errs validate.Errors) error {
 	for i := range e.fields {
 		f := &e.fields[i]
 		if f.ref == nil {
@@ -88,7 +89,11 @@ func (e *engine) checkRefs(tx *gorm.DB, orgID string, vals Values, errs validate
 		if !ok || v == nil {
 			continue
 		}
-		missing, err := f.ref.Exists(tx, orgID, []any{v})
+		if o.system && f.ref.TenantScoped() {
+			errs.Add(f.Name, f.label+": системийн мөрөнд байгууллагын лавлахыг холбох боломжгүй")
+			continue
+		}
+		missing, err := f.ref.Exists(tx, o.org, []any{v})
 		if err != nil {
 			return err
 		}
@@ -100,8 +105,11 @@ func (e *engine) checkRefs(tx *gorm.DB, orgID string, vals Values, errs validate
 }
 
 // checkUnique — Unique талбар тухайн org дотор давтагдаж байгаа эсэх (self-ийг оруулахгүй).
-// DB-ийн unique index нь уралдааныг барина (23505 → 409).
-func (e *engine) checkUnique(tx *gorm.DB, orgID string, selfID any, vals Values, errs validate.Errors) error {
+// ScopeShared: байгууллагын мөр өөрийн + системийн мөртэй (харагдах бүх мөр), системийн мөр зөвхөн
+// системийн мөртэй харьцуулагдана (өөр org-ийн утгыг хэзээ ч ил гаргахгүй). ScopeGlobal: бүх мөр.
+// DB-ийн unique index нь уралдааныг барина (23505 → 409; NULL org_id-тай мөрийг индекс давхардуулж
+// болох тул системийн мөрөнд NULLS NOT DISTINCT индекс зөвлөнө).
+func (e *engine) checkUnique(tx *gorm.DB, o owner, selfID any, vals Values, errs validate.Errors) error {
 	for i := range e.fields {
 		f := &e.fields[i]
 		if !f.Unique {
@@ -111,7 +119,12 @@ func (e *engine) checkUnique(tx *gorm.DB, orgID string, selfID any, vals Values,
 		if !ok || v == nil {
 			continue
 		}
-		q := tx.Table(e.table).Select("1").Where("org_id = ? AND "+quote(f.col)+" = ?", orgID, dbValue(v))
+		q := tx.Table(e.table).Select("1").Where(quote(f.col)+" = ?", dbValue(v))
+		if o.system {
+			q = e.ownWhere(q, "", o)
+		} else {
+			q = e.readWhere(q, "", o.org)
+		}
 		if selfID != nil {
 			q = q.Where(quote(e.idCol)+" <> ?", selfID)
 		}
@@ -129,10 +142,10 @@ func (e *engine) checkUnique(tx *gorm.DB, orgID string, selfID any, vals Values,
 	return nil
 }
 
-// lockRow — SELECT ... FOR UPDATE (org + soft-delete нөхцөлтэй). Олдохгүй бол errNotFound.
+// lockRow — SELECT ... FOR UPDATE (харагдах org/scope + soft-delete нөхцөлтэй). Олдохгүй бол errNotFound.
 func (e *engine) lockRow(tx *gorm.DB, orgID string, idVal any) (map[string]any, error) {
-	q := tx.Table(e.table).Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("org_id = ? AND "+quote(e.idCol)+" = "+e.idParam(), orgID, idVal)
+	q := e.readWhere(tx.Table(e.table).Clauses(clause.Locking{Strength: "UPDATE"}), "", orgID).
+		Where(quote(e.idCol)+" = "+e.idParam(), idVal)
 	if e.softDelete {
 		q = q.Where("deleted_at IS NULL")
 	}
@@ -146,11 +159,19 @@ func (e *engine) lockRow(tx *gorm.DB, orgID string, idVal any) (map[string]any, 
 	return rows[0], nil
 }
 
-func (e *engine) publish(tx *gorm.DB, orgID, suffix, id string, vals Values) error {
+func (e *engine) publish(tx *gorm.DB, o owner, suffix, id string, vals Values) error {
 	if !e.events {
 		return nil
 	}
-	payload := map[string]any{"id": id, "org_id": orgID}
+	payload := map[string]any{"id": id}
+	switch {
+	case e.scope == ScopeGlobal: // org_id-гүй хүснэгт: payload-д org байхгүй
+		payload["scope"] = "global"
+	case o.system:
+		payload["org_id"], payload["system"] = nil, true
+	default:
+		payload["org_id"] = o.org
+	}
 	if vals != nil {
 		out := make(map[string]any, len(vals))
 		for k, v := range vals {
@@ -161,7 +182,7 @@ func (e *engine) publish(tx *gorm.DB, orgID, suffix, id string, vals Values) err
 		payload["values"] = out
 	}
 	return events.Publish(tx, events.Event{
-		OrgID: orgID, Topic: e.name + "." + suffix, AggregateType: e.name, AggregateID: id, Payload: payload,
+		OrgID: o.org, Topic: e.name + "." + suffix, AggregateType: e.name, AggregateID: id, Payload: payload,
 	})
 }
 
@@ -174,13 +195,22 @@ func nullable(s string) any {
 
 // ─── POST / ───
 
-func (e *engine) create(c fiber.Ctx) error {
+func (e *engine) create(c fiber.Ctx) error { return e.createRow(c, false) }
+
+// createSystem — POST /system (зөвхөн ScopeShared + SystemCan): org_id NULL (системийн) мөр үүсгэнэ.
+func (e *engine) createSystem(c fiber.Ctx) error { return e.createRow(c, true) }
+
+func (e *engine) createRow(c fiber.Ctx, system bool) error {
 	orgID, ok := e.org(c)
 	if !ok {
 		return nil
 	}
 	if !e.allowed(c, ActionCreate) {
 		return e.forbidden(c, ActionCreate)
+	}
+	o := owner{org: orgID, system: system}
+	if system && !e.systemAllowed(c, ActionCreate) {
+		return jsonErr(c, fiber.StatusForbidden, msgSystemRow)
 	}
 	body, err := e.readBody(c)
 	if err != nil {
@@ -203,23 +233,23 @@ func (e *engine) create(c fiber.Ctx) error {
 		if e.idKind == IDUUID {
 			id = e.gen()
 		}
-		if err := e.runValidate(c, orgID, uid, ActionCreate, id, nil, vals, errs); err != nil {
+		if err := e.runValidate(c, o, uid, ActionCreate, id, nil, vals, errs); err != nil {
 			return err
 		}
-		if err := e.checkRefs(tx, orgID, vals, errs); err != nil {
+		if err := e.checkRefs(tx, o, vals, errs); err != nil {
 			return err
 		}
-		if err := e.checkUnique(tx, orgID, nil, vals, errs); err != nil {
+		if err := e.checkUnique(tx, o, nil, vals, errs); err != nil {
 			return err
 		}
-		states, err := e.checkChildren(tx, orgID, nil, inputs, errs)
+		states, err := e.checkChildren(tx, o, nil, inputs, errs)
 		if err != nil {
 			return err
 		}
 		if len(errs) > 0 {
 			return errs
 		}
-		x := e.ctx(c, tx, orgID, uid, ActionCreate, id, nil)
+		x := e.ctx(c, tx, o, uid, ActionCreate, id, nil)
 		if e.hooks.BeforeCreate != nil {
 			if err := e.hooks.BeforeCreate(x, vals); err != nil {
 				return err
@@ -232,7 +262,9 @@ func (e *engine) create(c fiber.Ctx) error {
 				row[k] = dbValue(v)
 			}
 		}
-		row["org_id"] = orgID // hook/body дарж чадахгүй
+		if e.scope != ScopeGlobal {
+			row["org_id"] = o.orgValue() // hook/body дарж чадахгүй; системийн мөрөнд NULL
+		}
 		if e.idKind == IDUUID {
 			row[e.idCol] = id
 		}
@@ -246,6 +278,9 @@ func (e *engine) create(c fiber.Ctx) error {
 			row[e.versionCol] = int64(1)
 		}
 		q := tx.Table(e.table)
+		if o.system {
+			q = tenant.SystemRow(q) // org_id NULL INSERT — Guard-д ил тод
+		}
 		if e.idKind == IDInt {
 			q = q.Clauses(clause.Returning{Columns: []clause.Column{{Name: e.idCol}}})
 		}
@@ -260,7 +295,7 @@ func (e *engine) create(c fiber.Ctx) error {
 			}
 			idVal, id, x.ID = n, fmt.Sprint(n), fmt.Sprint(n)
 		}
-		if err := e.writeChildren(tx, orgID, idVal, states); err != nil {
+		if err := e.writeChildren(tx, o, idVal, states); err != nil {
 			return err
 		}
 		if e.hooks.AfterCreate != nil {
@@ -277,7 +312,7 @@ func (e *engine) create(c fiber.Ctx) error {
 				return err
 			}
 		}
-		if err := e.publish(tx, orgID, "created", id, vals); err != nil {
+		if err := e.publish(tx, o, "created", id, vals); err != nil {
 			return err
 		}
 		out, err = e.loadDetail(tx, orgID, idVal)
@@ -285,11 +320,11 @@ func (e *engine) create(c fiber.Ctx) error {
 	})
 	if err != nil {
 		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
-			e.bumpCache(c, orgID)
+			e.bumpCache(c, o)
 		}
 		return e.fail(c, ActionCreate, err)
 	}
-	e.bumpCache(c, orgID) // commit-ийн ДАРАА
+	e.bumpCache(c, o) // commit-ийн ДАРАА
 	return c.Status(http.StatusCreated).JSON(out)
 }
 
@@ -327,9 +362,16 @@ func (e *engine) update(c fiber.Ctx) error {
 	uid := userID(c)
 
 	var out map[string]any
+	o := owner{org: orgID}
 	err = e.tx(c, orgID, func(tx *gorm.DB) error {
 		old, err := e.lockRow(tx, orgID, idVal)
 		if err != nil {
+			return err
+		}
+		if o, err = e.rowOwner(orgID, old); err != nil {
+			return err
+		}
+		if err := e.authorizeRow(c, ActionUpdate, o); err != nil { // системийн мөр: SystemCan, үгүй бол 403
 			return err
 		}
 		if e.versionCol != "" {
@@ -344,23 +386,23 @@ func (e *engine) update(c fiber.Ctx) error {
 				return err
 			}
 		}
-		if err := e.runValidate(c, orgID, uid, ActionUpdate, id, old, vals, errs); err != nil {
+		if err := e.runValidate(c, o, uid, ActionUpdate, id, old, vals, errs); err != nil {
 			return err
 		}
-		if err := e.checkRefs(tx, orgID, vals, errs); err != nil {
+		if err := e.checkRefs(tx, o, vals, errs); err != nil {
 			return err
 		}
-		if err := e.checkUnique(tx, orgID, idVal, vals, errs); err != nil {
+		if err := e.checkUnique(tx, o, idVal, vals, errs); err != nil {
 			return err
 		}
-		states, err := e.checkChildren(tx, orgID, idVal, inputs, errs)
+		states, err := e.checkChildren(tx, o, idVal, inputs, errs)
 		if err != nil {
 			return err
 		}
 		if len(errs) > 0 {
 			return errs
 		}
-		x := e.ctx(c, tx, orgID, uid, ActionUpdate, id, old)
+		x := e.ctx(c, tx, o, uid, ActionUpdate, id, old)
 		if e.hooks.BeforeUpdate != nil {
 			if err := e.hooks.BeforeUpdate(x, vals); err != nil {
 				return err
@@ -383,7 +425,7 @@ func (e *engine) update(c fiber.Ctx) error {
 			upd[e.versionCol] = gorm.Expr(quote(e.versionCol) + " + 1")
 		}
 		if len(upd) > 0 {
-			q := tx.Table(e.table).Where("org_id = ? AND "+quote(e.idCol)+" = "+e.idParam(), orgID, idVal)
+			q := e.ownWhere(tx.Table(e.table), "", o).Where(quote(e.idCol)+" = "+e.idParam(), idVal)
 			if e.softDelete {
 				q = q.Where("deleted_at IS NULL")
 			}
@@ -395,7 +437,7 @@ func (e *engine) update(c fiber.Ctx) error {
 				return errNotFound
 			}
 		}
-		if err := e.writeChildren(tx, orgID, idVal, states); err != nil {
+		if err := e.writeChildren(tx, o, idVal, states); err != nil {
 			return err
 		}
 		if e.hooks.AfterUpdate != nil {
@@ -412,7 +454,7 @@ func (e *engine) update(c fiber.Ctx) error {
 				return err
 			}
 		}
-		if err := e.publish(tx, orgID, "updated", id, vals); err != nil {
+		if err := e.publish(tx, o, "updated", id, vals); err != nil {
 			return err
 		}
 		out, err = e.loadDetail(tx, orgID, idVal)
@@ -420,11 +462,11 @@ func (e *engine) update(c fiber.Ctx) error {
 	})
 	if err != nil {
 		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
-			e.bumpCache(c, orgID)
+			e.bumpCache(c, o)
 		}
 		return e.fail(c, ActionUpdate, err)
 	}
-	e.bumpCache(c, orgID) // commit-ийн ДАРАА
+	e.bumpCache(c, o) // commit-ийн ДАРАА
 	return c.JSON(out)
 }
 
@@ -443,40 +485,51 @@ func (e *engine) remove(c fiber.Ctx) error {
 		return jsonErr(c, fiber.StatusBadRequest, msgBadID)
 	}
 	uid := userID(c)
-	err := e.tx(c, orgID, func(tx *gorm.DB) error {
-		return e.deleteOne(c, tx, orgID, uid, idVal, id, false)
+	o := owner{org: orgID}
+	err := e.tx(c, orgID, func(tx *gorm.DB) (err error) {
+		o, err = e.deleteOne(c, tx, orgID, uid, idVal, id, false)
+		return err
 	})
 	if err != nil {
 		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
-			e.bumpCache(c, orgID)
+			e.bumpCache(c, o)
 		}
 		return e.fail(c, ActionDelete, err)
 	}
-	e.bumpCache(c, orgID) // commit-ийн ДАРАА
+	e.bumpCache(c, o) // commit-ийн ДАРАА
 	return c.JSON(fiber.Map{"deleted": id})
 }
 
 // deleteOne — нэг мөрийг устгах бүрэн дүрэм (түгжих, BeforeDelete, children cascade, soft/hard,
 // AfterDelete, audit, event). DELETE /:id болон hook/children-тэй bulk delete хоёулаа үүнийг дуудна
 // (bulk=true үед audit үйлдэл нь bulk_delete).
-func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal any, id string, bulk bool) error {
+//
+// Буцаах owner нь устгасан мөрийн эзэмшигч (cache bump-д; алдааны үед ч тодорхой бол буцна).
+func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal any, id string, bulk bool) (o owner, err error) {
+	o = owner{org: orgID}
 	old, err := e.lockRow(tx, orgID, idVal)
 	if err != nil {
-		return err
+		return o, err
+	}
+	if o, err = e.rowOwner(orgID, old); err != nil {
+		return o, err
+	}
+	if err = e.authorizeRow(c, ActionDelete, o); err != nil { // системийн мөр: SystemCan, үгүй бол 403
+		return o, err
 	}
 	var auditBefore map[string]any
 	if e.audit != nil { // hard delete үед child-ууд ч устах тул түүхэнд оруулна
 		if auditBefore, err = e.auditState(tx, orgID, idVal, !e.softDelete && len(e.children) > 0); err != nil {
-			return err
+			return o, err
 		}
 	}
-	x := e.ctx(c, tx, orgID, uid, ActionDelete, id, old)
+	x := e.ctx(c, tx, o, uid, ActionDelete, id, old)
 	if e.hooks.BeforeDelete != nil {
-		if err := e.hooks.BeforeDelete(x); err != nil {
-			return err
+		if err = e.hooks.BeforeDelete(x); err != nil {
+			return o, err
 		}
 	}
-	q := tx.Table(e.table).Where("org_id = ? AND "+quote(e.idCol)+" = "+e.idParam(), orgID, idVal)
+	q := e.ownWhere(tx.Table(e.table), "", o).Where(quote(e.idCol)+" = "+e.idParam(), idVal)
 	var res *gorm.DB
 	if e.softDelete {
 		upd := map[string]any{"deleted_at": nowExpr()}
@@ -488,20 +541,20 @@ func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal an
 		}
 		res = q.Where("deleted_at IS NULL").Updates(upd)
 	} else {
-		if err := e.deleteAllChildren(tx, orgID, idVal); err != nil {
-			return err
+		if err = e.deleteAllChildren(tx, o, idVal); err != nil {
+			return o, err
 		}
 		res = q.Delete(map[string]any{})
 	}
 	if res.Error != nil {
-		return res.Error
+		return o, res.Error
 	}
 	if res.RowsAffected == 0 {
-		return errNotFound
+		return o, errNotFound
 	}
 	if e.hooks.AfterDelete != nil {
-		if err := e.hooks.AfterDelete(x); err != nil {
-			return err
+		if err = e.hooks.AfterDelete(x); err != nil {
+			return o, err
 		}
 	}
 	if e.audit != nil {
@@ -509,11 +562,11 @@ func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal an
 		if bulk {
 			a = audit.ActionBulkDelete
 		}
-		if err := e.auditWrite(tx, c, orgID, id, a, auditBefore, nil); err != nil {
-			return err
+		if err = e.auditWrite(tx, c, orgID, id, a, auditBefore, nil); err != nil {
+			return o, err
 		}
 	}
-	return e.publish(tx, orgID, "deleted", id, nil)
+	return o, e.publish(tx, o, "deleted", id, nil)
 }
 
 // ─── GET /:id ───

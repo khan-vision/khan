@@ -95,6 +95,10 @@ type Ctx struct {
 	ID       string         // update/delete; create-д Before*-д UUID, IDInt үед After*-д
 	Old      map[string]any // update/delete: түгжсэн хуучин мөр
 	Resource string
+	// System — ScopeShared: энэ нь системийн (org_id IS NULL) мөрийн бичилт (SystemCan-аар зөвшөөрөгдсөн).
+	// Үүнд OrgID нь хүсэлт гаргагчийн org хэвээр — hook системийн мөрийг org-ийн өгөгдөлтэй
+	// холбохгүй байхыг өөрөө шалгана.
+	System bool
 }
 
 // Hooks — lifecycle hook-ууд. Before* нь Values-ийг өөрчилж болно (ж: дугаар олгох);
@@ -115,6 +119,18 @@ type Resource[T any] struct {
 	Endpoint string // "/api/organization/conference/rooms" (codegen/meta; Mount-д заавал биш)
 	Table    string // "schema.name" заавал
 	Alias    string // жагсаалтын alias, анхдагч "t"
+
+	// Scope — хүснэгтийн tenant хүрээ. Zero = ScopeTenant (анхдагч, өөрчлөлтгүй). ScopeShared (hybrid:
+	// org_id NULL = системийн мөр, tenant-д унших л), ScopeGlobal (org_id баганагүй). Scope.go, docs/CRUD.md §2.1.
+	Scope Scope
+	// SystemCan — ScopeShared: системийн (org_id IS NULL) мөрийг үүсгэх (`POST /system`), засах, устгах
+	// эрх (ж: sysadmin). Can-тай ХАМТ шаардагдана (Can && SystemCan). nil → системийн мөр бичих БОЛОМЖГҮЙ
+	// (анхдагч, fail-closed). RLS-тэй хамт хэрэглэхгүй (Mount алдаа). Зөвхөн ScopeShared-д.
+	SystemCan func(c fiber.Ctx, a Action) bool
+	// GlobalWrites — ScopeGlobal: бичих route-уудыг (POST/PUT/DELETE/bulk) нээнэ. Бичилт нь БҮХ
+	// байгууллагад нөлөөлнө тул заавал ил тод баталгаажуулна; Can нь sysadmin-д л true байх ёстой.
+	// false (анхдагч) → Global resource унших-л (бичих route mount хийгдэхгүй). Зөвхөн ScopeGlobal-д.
+	GlobalWrites bool
 
 	ID     IDSpec
 	Fields []Field

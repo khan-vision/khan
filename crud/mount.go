@@ -41,7 +41,7 @@ func (e *engine) mount(router fiber.Router) {
 	if e.export != nil {
 		router.Get("/export.xlsx", t(e.exportHandler))
 	}
-	if e.bulk != nil {
+	if e.bulk != nil && e.writable() {
 		router.Post("/bulk", t(e.bulkHandler))
 	}
 	if e.exposeMeta {
@@ -55,6 +55,12 @@ func (e *engine) mount(router fiber.Router) {
 		router.Get("/:id/history", t(e.audit.handlers.Record))
 	}
 	router.Get("/:id", t(e.get))
+	if !e.writable() { // ScopeGlobal + GlobalWrites=false: унших-л (бичих route байхгүй)
+		return
+	}
+	if e.scope == ScopeShared && e.systemCan != nil {
+		router.Post("/system", t(e.createSystem)) // статик route — `POST /`-тэй зөрчилдөхгүй
+	}
 	router.Post("/", t(e.create))
 	router.Put("/:id", t(e.update))
 	router.Delete("/:id", t(e.remove))
@@ -78,11 +84,12 @@ func (e *engine) withTimeout(h fiber.Handler) fiber.Handler {
 
 // canMap — list/meta хариуны `can` ({read,create,update,delete}).
 func (e *engine) canMap(c fiber.Ctx) map[string]bool {
+	w := e.writable()
 	return map[string]bool{
 		"read":   e.allowed(c, ActionRead),
-		"create": e.allowed(c, ActionCreate),
-		"update": e.allowed(c, ActionUpdate),
-		"delete": e.allowed(c, ActionDelete),
+		"create": w && e.allowed(c, ActionCreate),
+		"update": w && e.allowed(c, ActionUpdate),
+		"delete": w && e.allowed(c, ActionDelete),
 	}
 }
 
@@ -210,7 +217,7 @@ func (e *engine) bulkHandler(c fiber.Ctx) error {
 		if req.Action == "delete" && e.bulkDeleteNeedsRows() {
 			uid := userID(c)
 			for _, id := range ids {
-				if err := e.deleteOne(c, tx, orgID, uid, id, fmt.Sprint(id), true); err != nil {
+				if _, err := e.deleteOne(c, tx, orgID, uid, id, fmt.Sprint(id), true); err != nil {
 					return err
 				}
 				n++
@@ -248,11 +255,11 @@ func (e *engine) bulkHandler(c fiber.Ctx) error {
 	})
 	if err != nil {
 		if ambiguousWrite(err) { // commit болсон байж магадгүй → хуучирлаас сэргийлж bump
-			e.bumpCache(c, orgID)
+			e.bumpCache(c, owner{org: orgID})
 		}
 		return e.queryFail(c, a, err)
 	}
-	e.bumpCache(c, orgID) // commit-ийн ДАРАА
+	e.bumpCache(c, owner{org: orgID}) // commit-ийн ДАРАА
 	return c.JSON(fiber.Map{"affected": n})
 }
 

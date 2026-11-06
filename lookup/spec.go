@@ -74,6 +74,10 @@ func (s Spec) valueCol() string {
 
 func (s Spec) tenant() bool { return s.Tenant == nil || *s.Tenant }
 
+// TenantScoped — Spec нь org-оор хязгаарлагдсан (Tenant унтраагүй) эсэх. Shared ч true.
+// crud нь системийн мөр (бүх org-д харагдах)-д org-ийн лавлах холбохыг хориглоход ашиглана.
+func (s Spec) TenantScoped() bool { return s.tenant() }
+
 func (s Spec) defaultLimit() int {
 	if s.Limit > 0 {
 		return s.Limit

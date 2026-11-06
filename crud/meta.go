@@ -17,6 +17,12 @@ type Meta struct {
 	Version    string `json:"version,omitempty"`
 	SoftDelete bool   `json:"soft_delete"`
 
+	// Scope — "tenant" | "shared" | "global" (docs/CRUD.md §2.1). SystemWrites: shared + SystemCan
+	// (`POST {endpoint}/system` бий). GlobalWrites: global + бичих route нээлттэй.
+	Scope        string `json:"scope"`
+	SystemWrites bool   `json:"system_writes,omitempty"`
+	GlobalWrites bool   `json:"global_writes,omitempty"`
+
 	Fields   []FieldMeta `json:"fields"`
 	Children []ChildMeta `json:"children"`
 
@@ -85,7 +91,7 @@ type ChildMeta struct {
 func (r *Resource[T]) Meta() Meta {
 	e, err := r.build(false)
 	if err != nil {
-		return Meta{Name: r.Name, Label: r.Label, Endpoint: r.Endpoint, Table: r.Table,
+		return Meta{Name: r.Name, Label: r.Label, Endpoint: r.Endpoint, Table: r.Table, Scope: r.Scope.String(),
 			Fields: []FieldMeta{}, Children: []ChildMeta{}, Filterable: map[string]query.FilterKind{}, Sort: []string{}, Totals: []string{}}
 	}
 	return e.meta()
@@ -97,6 +103,9 @@ func (e *engine) meta() Meta {
 		ID:            IDMeta{Column: e.idCol, Kind: e.idKind},
 		Version:       e.versionCol,
 		SoftDelete:    e.softDelete,
+		Scope:         e.scope.String(),
+		SystemWrites:  e.scope == ScopeShared && e.systemCan != nil,
+		GlobalWrites:  e.scope == ScopeGlobal && e.globalWrites,
 		Fields:        e.fieldMetas(e.fields),
 		Children:      make([]ChildMeta, 0, len(e.children)),
 		Filterable:    query.Filterable(e.listSpec.Filters),
