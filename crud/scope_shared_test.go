@@ -611,9 +611,13 @@ func TestSharedWithRLSSystemRows(t *testing.T) {
 	c := do(t, app, "POST", "/kinds", f.orgA, roleAdmin, map[string]any{"name": "шинэ", "group_id": gs, "items": []map[string]any{{"label": "x"}}})
 	mustStatus(t, c, 201)
 	mustStatus(t, do(t, app, "PUT", "/kinds/"+c.str("id"), f.orgA, roleAdmin, map[string]any{"name": "шинэ2", "group_id": ga, "version": 1}), 200)
-	// системийн мөр: аппын 403 (RLS-ийн өмнө) ба DB түвшинд ч өөрчлөгдөхгүй
-	mustStatus(t, do(t, app, "PUT", "/kinds/"+sys, f.orgA, roleAdmin, map[string]any{"name": "h", "version": 1}), 403)
-	mustStatus(t, do(t, app, "DELETE", "/kinds/"+sys, f.orgA, roleAdmin, nil), 403)
+	// системийн мөр: RLS-ийн `FOR UPDATE` нь бичих policy-д харагдахгүй тул түгжих үед 404 (403 биш) —
+	// аль ч тохиолдолд өөрчлөгдөхгүй (fail-closed). bulk нь системийн мөрийг түгжиж үл чадна → 0 нөлөө.
+	mustStatus(t, do(t, app, "PUT", "/kinds/"+sys, f.orgA, roleAdmin, map[string]any{"name": "h", "version": 1}), 404)
+	mustStatus(t, do(t, app, "DELETE", "/kinds/"+sys, f.orgA, roleAdmin, nil), 404)
+	if bk := do(t, app, "POST", "/kinds/bulk", f.orgA, roleAdmin, map[string]any{"action": "delete", "ids": []string{sys}}); bk.Status != 200 || bk.JSON["affected"] != float64(0) {
+		t.Fatalf("RLS bulk: %s", bk.Raw)
+	}
 	if f.count(`SELECT count(*) FROM `+f.tbl("kind")+` WHERE id = ? AND name = 'Систем' AND org_id IS NULL`, sys) != 1 {
 		t.Fatal("системийн мөр өөрчлөгдсөн")
 	}
