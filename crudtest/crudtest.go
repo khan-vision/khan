@@ -83,6 +83,14 @@ type Config struct {
 	RefSample map[string]func(org string) string
 	// ChildSample — child нэр → тухайн org-ийн хүчинтэй child мөр (id-гүй). Байхгүй бол children шалгалт алгасагдана.
 	ChildSample map[string]func(org string) map[string]any
+
+	// SharedID — Meta.Scope "shared": ЭХЭЭС БАЙГАА системийн (org_id NULL) мөрийн id; "global": байгаа
+	// ямар ч мөрийн id. Shared үед tenant-ийн тусгаарлалтын шалгалтуудад нэмж «хоёр org хоёулаа системийн
+	// мөрийг харна, хэн ч өөрчилж чадахгүй» шалгана. Хоосон бол энэ хэсэг алгасагдана (Global-д заавал,
+	// эс бөгөөс зөвхөн token-гүй 401 шалгана).
+	SharedID string
+	// SystemWritable — Test principal нь SystemCan-тай (системийн мөрийг өөрчилж чадна): 403 шалгалтыг алгасна.
+	SystemWritable bool
 }
 
 // Isolation — tenant leak тестүүдийг subtest-ээр ажиллуулна.
@@ -163,6 +171,10 @@ func Check(t T, cfg Config) {
 		return
 	}
 	a, b := who{r.cfg.OrgA, r.cfg.UserA}, who{r.cfg.OrgB, r.cfg.UserB}
+	if cfg.Meta.Scope == "global" {
+		r.checkGlobal(t, a, b)
+		return
+	}
 	rowA := r.createRow(a, nil, "A")
 	rowB := r.createRow(b, nil, "B")
 
@@ -181,7 +193,76 @@ func Check(t T, cfg Config) {
 	if len(cfg.Meta.Children) > 0 {
 		t.Run("children_cross_org", func(t T) { r.sub(t).childrenCross(a, b, rowA) })
 	}
+	if cfg.Meta.Scope == "shared" && cfg.SharedID != "" {
+		t.Run("shared_system_rows", func(t T) { r.sub(t).sharedSystem(a, b, row{id: cfg.SharedID}) })
+	}
 	t.Run("unauthenticated_401", func(t T) { r.sub(t).unauthenticated(rowA) })
+}
+
+// checkGlobal — ScopeGlobal: мөр org-оос үл хамаарна → «B A-ийнхыг харахгүй» биш, ХОЁР org ИЖИЛ
+// өгөгдөл харна; token-гүй 401. GlobalWrites үед A үүсгэсэн мөрийг B шууд харна.
+func (r *runner) checkGlobal(t T, a, b who) {
+	id := r.cfg.SharedID
+	if r.cfg.Meta.GlobalWrites {
+		id = r.createRow(a, nil, "A").id
+	}
+	if id != "" {
+		t.Run("global_visible_to_every_org", func(t T) {
+			rr := r.sub(t)
+			for _, w := range []who{a, b} {
+				res := rr.do(w, "GET", "/"+url.PathEscape(id), nil)
+				rr.wantStatus(res, 200, "GET /:id (global мөр, "+w.org+")")
+				if l := rr.do(w, "GET", "?limit=200", nil); l.Status != 200 {
+					t.Errorf("GET / (%s): %s", w.org, l)
+				}
+			}
+		})
+	}
+	t.Run("unauthenticated_401", func(t T) { r.sub(t).unauthenticated(row{id: id}) })
+}
+
+// sharedSystem — ScopeShared: системийн мөрийг хоёр org харна (жагсаалт, detail); өөрчлөх оролдлого
+// (PUT, DELETE, bulk) 403 бөгөөд мөр өөрчлөгдөхгүй (SystemWritable үед алгасна).
+func (r *runner) sharedSystem(a, b who, sys row) {
+	r.t.Helper()
+	before := r.snapshot(a, sys.id)
+	for _, w := range []who{a, b} {
+		if res := r.do(w, "GET", "/"+url.PathEscape(sys.id), nil); res.Status != 200 {
+			r.t.Errorf("%s: системийн мөр харагдсангүй: %s", w.org, res)
+		}
+		if l := r.do(w, "GET", "?limit=200", nil); l.Status != 200 || (len(r.listIDs(l)) > 0 && !r.listIDs(l)[sys.id]) {
+			r.t.Errorf("%s: системийн мөр жагсаалтад алга: %s", w.org, l)
+		}
+	}
+	if r.cfg.SystemWritable {
+		return
+	}
+	for _, w := range []who{a, b} {
+		put := before.JSON
+		body := map[string]any{}
+		if v := r.cfg.Meta.Version; v != "" {
+			body[v] = put[v]
+		}
+		for k, v := range r.payload(w.org, nil) {
+			body[k] = v
+		}
+		r.wantStatus(r.do(w, "PUT", "/"+url.PathEscape(sys.id), body), 403, w.org+": PUT системийн мөр")
+		r.wantStatus(r.do(w, "DELETE", "/"+url.PathEscape(sys.id), nil), 403, w.org+": DELETE системийн мөр")
+		if r.cfg.Meta.Bulk {
+			act := "delete"
+			if !r.cfg.Meta.BulkDelete {
+				act = "update"
+			}
+			b := map[string]any{"action": act, "ids": []any{r.idJSON(sys.id)}}
+			if act == "update" && len(r.cfg.Meta.BulkFields) > 0 {
+				b["set"] = map[string]any{}
+			}
+			if res := r.do(w, "POST", "/bulk", b); res.Status == 200 {
+				r.t.Errorf("%s: bulk системийн мөрөнд амжилттай (affected) — LEAK: %s", w.org, res)
+			}
+		}
+	}
+	r.unchanged(a, sys, before, "системийн мөрийн PUT/DELETE/bulk")
 }
 
 func newRunner(t T, cfg Config) (*runner, error) {
@@ -794,6 +875,11 @@ func (r *runner) unauthenticated(rowA row) {
 			body = map[string]any{}
 		}
 		res := r.do(anon, c.method, c.path, body)
+		// унших-л Global-д бичих route mount хийгдээгүй (405/404) — өгөгдөл өөрчлөгдөхгүй тул зөвшөөрнө
+		if readOnlyGlobal := m.Scope == "global" && !m.GlobalWrites; readOnlyGlobal && c.method != "GET" && c.path != "/query" &&
+			(res.Status == 405 || res.Status == 404) {
+			continue
+		}
 		if res.Status != 401 {
 			r.t.Errorf("token-гүй %s %s: 401 хүлээсэн, ирсэн %s", c.method, c.path, res)
 		}
