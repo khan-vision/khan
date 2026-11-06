@@ -31,7 +31,7 @@ func FromQuery(c fiber.Ctx) Request {
 	return Request{
 		Page:    fiber.Query[int](c, "page", 1),
 		Limit:   fiber.Query[int](c, "limit", 0),
-		Search:  c.Query("search"),
+		Search:  stripNUL(c.Query("search")),
 		Sort:    c.Query("sort"),
 		Dir:     c.Query("dir"),
 		Filters: c.Query("filters"),
@@ -65,7 +65,7 @@ func parseBody(body []byte) (Request, error) {
 	if err := json.Unmarshal(body, &b); err != nil {
 		return Request{}, ferr("хүсэлтийн JSON буруу")
 	}
-	req := Request{Page: b.Page, Limit: b.Limit, Search: b.Search, Sort: b.Sort, Dir: b.Dir}
+	req := Request{Page: b.Page, Limit: b.Limit, Search: stripNUL(b.Search), Sort: b.Sort, Dir: b.Dir}
 	if req.Page == 0 {
 		req.Page = 1
 	}
@@ -150,3 +150,6 @@ func (s Spec) orderFor(sortKey, dir string) string {
 	}
 	return col + " " + strings.ToUpper(dir)
 }
+
+// stripNUL — NUL тэмдэгтийг хасна (Postgres text-д зөвшөөрөгдөхгүй, 22021 → 500).
+func stripNUL(s string) string { return strings.ReplaceAll(s, "\x00", "") }

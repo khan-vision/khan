@@ -55,6 +55,17 @@
 
 Go↔TS codegen нь `crud.Resource`-ийн тодорхойлолтоос хамаардаг тул `crud`-тэй хамт хийгдэнэ.
 
+## v0.4.0 — CRUD цөм ✅
+
+- **validate**: 15 Kind (Money/Number = decimal string, float биш), Монгол алдааны мессеж, 422 envelope.
+- **lookup**: relation-validated select (`Exists`), `/options` handler, аюулгүй `Where` grammar.
+- **crud**: `Resource[T]` — list/query/export/bulk/meta/options/get/create/update/delete, children (subform),
+  hooks, optimistic lock, soft delete, RLS, events, timeout. Гэрээ = [CRUD.md](CRUD.md); бие даасан аюулгүй
+  байдлын review-ийн 9 олдвор засагдсан (§8 13–19).
+- **codegen**: `crud.Meta` → TS (Payload/Row/zod/KvFieldDef/Endpoint) + OpenAPI 3.1; `tsc`-ээр шалгагдсан.
+- **crudtest**: resource бүрд tenant leak тест (9 subtest).
+- **upload**: аюулгүй файл оруулах/үйлчлэх (агуулгын шалгалт, SVG sanitizer, таашгүй нэр, `LambdaCompat`).
+
 ## Дараагийн package-ууд (P1+)
 
 - **auth**: HS256 issue/verify. Claim нэр (`id`, `login`, `role`, `org_id`, `extra_role`, `portal_only`, `sid`)

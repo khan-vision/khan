@@ -408,6 +408,9 @@ func str(raw json.RawMessage) (string, error) {
 		if len(s) > maxFilterValLen {
 			return "", ferr("шүүлтийн утга хэт урт")
 		}
+		if strings.ContainsRune(s, 0) { // Postgres text-д NUL хориотой (22021 → 500)
+			return "", ferr("шүүлтийн утгад хориотой тэмдэгт байна")
+		}
 		return s, nil
 	}
 	var n json.Number

@@ -34,9 +34,15 @@ gorm postgres driver v1.6.3, golang-jwt v5.
 | `obs` | ✅ | `RequestID`, request-scoped slog, `AccessLog`, нууц далдлалт (`RedactString`, `ReplaceAttr`), `/healthz` + `/readyz`, `GormLogger` |
 | `events` | ✅ | Transactional outbox: `Publish(tx, Event)`, `Dispatcher` (at-least-once, SKIP LOCKED, retry/backoff/dead, `prefix.*`), `Purge`, `SchemaSQL` |
 | `idempotency` | ✅ | `Idempotency-Key` Fiber v3 middleware (JWT org/user scope, replay, 409/422, TTL), `Purge`, `SchemaSQL` |
+| `upload` | ✅ | Аюулгүй файл оруулах/үйлчлэх (lambda `/lambda/krud/upload` + `/uploaded` thumb-ийг орлоно). Анхдагч: JSON хариу, `<ангилал>/2026/11/`, таашгүй нэр (`geree-<16hex>.pdf`), өргөтгөл буруу raster зургийг жинхэнэ өргөтгөлөөр хадгална; `LambdaCompat` = шилжилтийн хуучин route-д text/plain + `2026/November` + дараалсан нэр. Хуучин файлууд хэвээр үйлчлэгдэнэ. өргөтгөл allowlist + агуулгын шалгалт (magic byte, decode, zip бүтэц), SVG XML-tokenizer sanitizer, pixel-bomb хамгаалалт, `thumb_` thumbnail, `os.Root` суурьтай `LocalStorage` (symlink/`..` гарахгүй, түр файл+rename, O_EXCL), `Serve` (nosniff, CSP sandbox, Range, ETag) |
 | `testkit` | ✅ | Local test DB guard, `TxDB` (rollback), fake/signed JWT |
 | `cmd/khan` | ✅ | `khan schema dump / lint / diff / rls`, `khan migrate status / up` |
-| `access`, `crud` (+ Go↔TS codegen), `lookup`, `validate`, `cache`, `upload`, `audit` | ⏳ | → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| `validate` | ✅ | JSON → typed утга (`Parse`: Money/Number decimal мөр, Int, Date, UUID, Enum, JSON, Password→bcrypt, Phone, Email), `Rules`, `Errors` → 422 envelope |
+| `lookup` | ✅ | `Spec` → `GET /options` (`search/parent/ids/limit`) + `Exists` (relation/FK шалгалт, org-scoped), `Where` grammar шалгагч |
+| `crud` | ✅ | Declarative CRUD: `Resource[T]` → list/query/export/bulk (`query`-ээр) + GET/POST/PUT/DELETE, options, meta, children (subform), hook, events (outbox), optimistic `Version`, soft delete, RLS. Гэрээ: [docs/CRUD.md](docs/CRUD.md) |
+| `codegen` | ✅ | `crud.Meta` → TypeScript (`Payload`/`Row` interface, zod v4 schema, `KvFieldDef[]`, Ref `load`, endpoint) ба OpenAPI 3.1 JSON; deterministic, `WriteFile` (өөрчлөлтгүй бол хөндөхгүй). Апп өөрийн `cmd/kvgen`-ээс дуудна. [docs/CRUD.md §6](docs/CRUD.md) |
+| `crudtest` | ✅ | `Isolation(t, Config)` — tenant leak тест generator (list/GET/PUT/DELETE/bulk/body org_id/ref/options/children/401), JWT эсвэл header claims. [docs/CRUD.md §7](docs/CRUD.md) |
+| `access`, `cache`, `audit` | ⏳ | → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 ## Хэрэглээ
 
@@ -76,6 +82,31 @@ Migration бүр өөрийн транзакцид `SET LOCAL lock_timeout`-то
 Файлын эхний мөр `-- khan:no-transaction` бол транзакцгүй (`CREATE INDEX CONCURRENTLY`; нэг statement).
 Хэрэглэгдсэн файл өөрчлөгдвөл (checksum) эсвэл DB-д байгаа хувилбар хавтсанд алга бол юу ч ажиллуулахгүй
 алдаа өгнө (`-allow-missing` / `Options.AllowMissing`). Хяналт: `khan.schema_migrations`. Зөвхөн урагшаа.
+
+## CRUD (declarative)
+
+```go
+rooms := &crud.Resource[map[string]any]{
+    Name: "organization.conference_room", Label: "Хурлын өрөө", Endpoint: "/api/organization/conference/rooms",
+    Table: "organization.conference_room",
+    Fields: []crud.Field{
+        {Name: "room_name", Label: "Нэр", Kind: validate.String, Rules: validate.Rules{Required: true, MaxLen: 500}},
+        {Name: "capacity", Label: "Багтаамж", Kind: validate.Int, Rules: validate.Rules{Nullable: true, Min: validate.Bound(0)}},
+        {Name: "owner_id", Label: "Эзэмшигч", Kind: validate.UUID, Rules: validate.Rules{Nullable: true},
+            Ref: &lookup.Spec{Table: "organization.employee", Label: []string{"last_name", "first_name"}, SoftDelete: true}},
+    },
+    List: query.Spec{Search: []string{"t.room_name"}, DefaultOrder: "t.room_name"},
+    Can:  func(c fiber.Ctx, a crud.Action) bool { return a == crud.ActionRead || isAdmin(c) }, // ЗААВАЛ (fail-closed)
+    DB:   func() *gorm.DB { return gdb },
+    SoftDelete: true, Version: "version", Events: true,
+}
+if err := rooms.Mount(app.Group("/api/organization/conference/rooms", authMW)); err != nil { // тохиргоо буруу бол error
+    log.Fatal(err)
+}
+```
+
+`org_id` зөвхөн JWT-ээс; body-ийн `org_id`/`id` үл тоогдоно; өөр org-ийн мөр 404; ref нь тухайн org-д олдох ёстой (422);
+алдаа `{"error":"…","errors":{"field":["…"]}}` (KvForm `serverErrors.ts`).
 
 ## Tenant тусгаарлалт (RLS)
 

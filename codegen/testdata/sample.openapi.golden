@@ -1,0 +1,2015 @@
+{
+  "components": {
+    "responses": {
+      "BadRequest": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "JSON/id/шүүлтийн формат буруу, body хэт том"
+      },
+      "Conflict": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Version зөрсөн, unique/FK constraint, hook conflict"
+      },
+      "Forbidden": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Can(action) == false"
+      },
+      "Internal": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Дотоод алдаа (жинхэнэ алдаа body-д гарахгүй)"
+      },
+      "NotFound": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "Мөр байхгүй ЭСВЭЛ өөр org-ийнх (ялгахгүй)"
+      },
+      "Unauthorized": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "description": "org/JWT алга"
+      },
+      "Unprocessable": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        },
+        "description": "Талбарын шалгалт, ref-ийн org, unique, children"
+      }
+    },
+    "schemas": {
+      "BulkResult": {
+        "properties": {
+          "affected": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "affected"
+        ],
+        "type": "object"
+      },
+      "Can": {
+        "properties": {
+          "create": {
+            "type": "boolean"
+          },
+          "delete": {
+            "type": "boolean"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "update": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ConferenceRoom": {
+        "additionalProperties": true,
+        "description": "Хурлын өрөө — дэлгэрэнгүй мөр",
+        "properties": {
+          "active": {
+            "description": "Идэвхтэй",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "area": {
+            "description": "Талбай (м2). Decimal, яг цифртэй JSON тоо; бутархай ≤ 3 орон",
+            "maximum": 9999.5,
+            "minimum": 0.5,
+            "type": "number"
+          },
+          "capacity": {
+            "description": "Багтаамж",
+            "format": "int64",
+            "maximum": 100000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "code": {
+            "description": "Код \"A\" */ \u003cb\u003e",
+            "maxLength": 20,
+            "pattern": "(?i)^[a-z0-9-]+$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "Тайлбар",
+            "maxLength": 10000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "description": "Имэйл",
+            "format": "email",
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "equipment": {
+            "items": {
+              "$ref": "#/components/schemas/ConferenceRoomEquipment"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "manager_id": {
+            "description": "Менежер",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "description": "Мета. Дурын JSON"
+          },
+          "note": {
+            "description": "Тэмдэглэл",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_time": {
+            "description": "Нээх цаг",
+            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "opens": {
+            "description": "Нээх огноо",
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "owner_id": {
+            "description": "Эзэмшигч",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "description": "Утас. Монгол 8 оронтой дугаар (+976 хасагдана) эсвэл E.164 `+…`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "description": "Үнэ. Decimal, яг цифртэй JSON тоо; бутархай ≤ 2 орон",
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ref_code": {
+            "description": "Лавлах UUID",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_name": {
+            "description": "Нэр",
+            "maxLength": 500,
+            "minLength": 2,
+            "type": "string"
+          },
+          "starts_at": {
+            "description": "Эхлэх цаг",
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "Төлөв",
+            "enum": [
+              "draft",
+              "open",
+              "closed",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ConferenceRoomCreate": {
+        "additionalProperties": false,
+        "description": "Хурлын өрөө — үүсгэх хүсэлт",
+        "properties": {
+          "active": {
+            "default": true,
+            "description": "Идэвхтэй",
+            "type": "boolean"
+          },
+          "area": {
+            "description": "Талбай (м2). Decimal: JSON тоо эсвэл тоон мөр; бутархай ≤ 3 орон. Том дүнг (\u003e15 цифр) тоон мөрөөр илгээ",
+            "oneOf": [
+              {
+                "maximum": 9999.5,
+                "minimum": 0.5,
+                "type": "number"
+              },
+              {
+                "pattern": "^-?\\d+(\\.\\d+)?$",
+                "type": "string"
+              }
+            ]
+          },
+          "capacity": {
+            "description": "Багтаамж",
+            "format": "int64",
+            "maximum": 100000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "code": {
+            "description": "Код \"A\" */ \u003cb\u003e",
+            "maxLength": 20,
+            "pattern": "(?i)^[a-z0-9-]+$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "Тайлбар",
+            "maxLength": 10000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "description": "Имэйл",
+            "format": "email",
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "equipment": {
+            "description": "Тоног төхөөрөмж: бүрэн жагсаалт",
+            "items": {
+              "$ref": "#/components/schemas/ConferenceRoomEquipmentInput"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "manager_id": {
+            "description": "Менежер",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "description": "Мета. Дурын JSON"
+          },
+          "note": {
+            "description": "Тэмдэглэл",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open_time": {
+            "description": "Нээх цаг",
+            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "opens": {
+            "description": "Нээх огноо",
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner_id": {
+            "description": "Эзэмшигч",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "description": "Утас. Монгол 8 оронтой дугаар (+976 хасагдана) эсвэл E.164 `+…`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "description": "Үнэ. Decimal: JSON тоо эсвэл тоон мөр; бутархай ≤ 2 орон. Том дүнг (\u003e15 цифр) тоон мөрөөр илгээ",
+            "oneOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "pattern": "^-?\\d+(\\.\\d+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ref_code": {
+            "description": "Лавлах UUID",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_name": {
+            "description": "Нэр",
+            "maxLength": 500,
+            "minLength": 2,
+            "type": "string"
+          },
+          "secret": {
+            "description": "Нууц үг",
+            "format": "password",
+            "minLength": 8,
+            "type": "string",
+            "writeOnly": true
+          },
+          "starts_at": {
+            "description": "Эхлэх цаг",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "description": "Төлөв",
+            "enum": [
+              "draft",
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "room_name",
+          "area",
+          "meta",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "ConferenceRoomEquipment": {
+        "additionalProperties": true,
+        "description": "Тоног төхөөрөмж",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "item_id": {
+            "description": "Бараа",
+            "format": "uuid",
+            "type": "string"
+          },
+          "qty": {
+            "description": "Тоо",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "unit_price": {
+            "description": "Нэгж үнэ. Decimal, яг цифртэй JSON тоо; бутархай ≤ 2 орон",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ConferenceRoomEquipmentInput": {
+        "description": "Тоног төхөөрөмж",
+        "properties": {
+          "id": {
+            "description": "Байгаа мөрийг засахад; байхгүй бол шинэ мөр",
+            "format": "uuid",
+            "type": "string"
+          },
+          "item_id": {
+            "description": "Бараа",
+            "format": "uuid",
+            "type": "string"
+          },
+          "qty": {
+            "description": "Тоо",
+            "format": "int64",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "unit_price": {
+            "description": "Нэгж үнэ. Decimal: JSON тоо эсвэл тоон мөр; бутархай ≤ 2 орон. Том дүнг (\u003e15 цифр) тоон мөрөөр илгээ",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^-?\\d+(\\.\\d+)?$",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "required": [
+          "item_id",
+          "qty",
+          "unit_price"
+        ],
+        "type": "object"
+      },
+      "ConferenceRoomList": {
+        "properties": {
+          "can": {
+            "$ref": "#/components/schemas/Can"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Жагсаалтын мөр (resource-ийн ListQuery-ийн SELECT-ээр тодорхойлогдоно)",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "filterable": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totals": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "data",
+          "total"
+        ],
+        "type": "object"
+      },
+      "ConferenceRoomUpdate": {
+        "additionalProperties": false,
+        "description": "Хурлын өрөө — засах хүсэлт (хэсэгчилсэн)",
+        "properties": {
+          "active": {
+            "default": true,
+            "description": "Идэвхтэй",
+            "type": "boolean"
+          },
+          "area": {
+            "description": "Талбай (м2). Decimal: JSON тоо эсвэл тоон мөр; бутархай ≤ 3 орон. Том дүнг (\u003e15 цифр) тоон мөрөөр илгээ",
+            "oneOf": [
+              {
+                "maximum": 9999.5,
+                "minimum": 0.5,
+                "type": "number"
+              },
+              {
+                "pattern": "^-?\\d+(\\.\\d+)?$",
+                "type": "string"
+              }
+            ]
+          },
+          "capacity": {
+            "description": "Багтаамж",
+            "format": "int64",
+            "maximum": 100000,
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "code": {
+            "description": "Код \"A\" */ \u003cb\u003e",
+            "maxLength": 20,
+            "pattern": "(?i)^[a-z0-9-]+$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "description": "Тайлбар",
+            "maxLength": 10000,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "description": "Имэйл",
+            "format": "email",
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "equipment": {
+            "description": "Тоног төхөөрөмж: бүрэн жагсаалт (түлхүүр алга/null бол өөрчлөгдөхгүй)",
+            "items": {
+              "$ref": "#/components/schemas/ConferenceRoomEquipmentInput"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "manager_id": {
+            "description": "Менежер",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "meta": {
+            "description": "Мета. Дурын JSON"
+          },
+          "open_time": {
+            "description": "Нээх цаг",
+            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "opens": {
+            "description": "Нээх огноо",
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "owner_id": {
+            "description": "Эзэмшигч",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "phone": {
+            "description": "Утас. Монгол 8 оронтой дугаар (+976 хасагдана) эсвэл E.164 `+…`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "description": "Үнэ. Decimal: JSON тоо эсвэл тоон мөр; бутархай ≤ 2 орон. Том дүнг (\u003e15 цифр) тоон мөрөөр илгээ",
+            "oneOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "pattern": "^-?\\d+(\\.\\d+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ref_code": {
+            "description": "Лавлах UUID",
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "room_name": {
+            "description": "Нэр",
+            "maxLength": 500,
+            "minLength": 2,
+            "type": "string"
+          },
+          "starts_at": {
+            "description": "Эхлэх цаг",
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "default": "draft",
+            "description": "Төлөв",
+            "enum": [
+              "draft",
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "description": "Optimistic lock: одоогийн version (зөрвөл 409)",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
+      "DeleteResult": {
+        "properties": {
+          "deleted": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      },
+      "Error": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "ListQuery": {
+        "properties": {
+          "dir": {
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "type": "string"
+          },
+          "filters": {
+            "description": "listquery шүүлт: объект эсвэл түүнийг JSON мөр болгосон",
+            "oneOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "limit": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "page": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "search": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Option": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "parent_value": {
+            "type": [
+              "string",
+              "integer",
+              "null"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "integer"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "type": "object"
+      },
+      "OptionList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Option"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "Tag": {
+        "additionalProperties": true,
+        "description": "Шошго — дэлгэрэнгүй мөр",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deleted_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "label": {
+            "description": "Нэр",
+            "maxLength": 255,
+            "type": "string"
+          },
+          "org_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updated_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "TagCreate": {
+        "description": "Шошго — үүсгэх хүсэлт",
+        "properties": {
+          "label": {
+            "description": "Нэр",
+            "maxLength": 255,
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "type": "object"
+      },
+      "TagList": {
+        "properties": {
+          "can": {
+            "$ref": "#/components/schemas/Can"
+          },
+          "data": {
+            "items": {
+              "additionalProperties": true,
+              "description": "Жагсаалтын мөр (resource-ийн ListQuery-ийн SELECT-ээр тодорхойлогдоно)",
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "filterable": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "totals": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "data",
+          "total"
+        ],
+        "type": "object"
+      },
+      "TagUpdate": {
+        "description": "Шошго — засах хүсэлт (хэсэгчилсэн)",
+        "properties": {
+          "label": {
+            "description": "Нэр",
+            "maxLength": 255,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "error": {
+            "examples": [
+              "Мэдээлэл буруу"
+            ],
+            "type": "string"
+          },
+          "errors": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "талбар → мессежүүд. Child талбарын түлхүүр: `lines.0.qty`",
+            "type": "object"
+          }
+        },
+        "required": [
+          "error",
+          "errors"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "JWT (Authorization: Bearer). org_id зөвхөн token-оос авагдана.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "Khan ERP",
+    "version": "1.2.3"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/organization/conference/rooms": {
+      "get": {
+        "operationId": "listConferenceRoom",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "enum": [
+                "capacity",
+                "room_name"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "listquery шүүлт (JSON мөр). Шүүх боломжтой: capacity: number, room_name: text, status: enum",
+            "in": "query",
+            "name": "filters",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceRoomList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — жагсаалт",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      },
+      "post": {
+        "operationId": "createConferenceRoom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConferenceRoomCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceRoom"
+                }
+              }
+            },
+            "description": "Үүссэн мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — үүсгэх",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/conference/rooms/bulk": {
+      "post": {
+        "description": "delete → delete эрх, update → update эрх шаардана. Бусад org-ийн id нөлөөлөхгүй (affected-д орохгүй).",
+        "operationId": "bulkConferenceRoom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "delete",
+                      "update"
+                    ],
+                    "type": "string"
+                  },
+                  "ids": {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "set": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "capacity": {
+                        "description": "Багтаамж",
+                        "format": "int64",
+                        "maximum": 100000,
+                        "minimum": 0,
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "status": {
+                        "default": "draft",
+                        "description": "Төлөв",
+                        "enum": [
+                          "draft",
+                          "open",
+                          "closed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "action",
+                  "ids"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            },
+            "description": "Нөлөөлсөн мөрийн тоо"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — бөөнөөр засах/устгах",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/conference/rooms/export.xlsx": {
+      "get": {
+        "operationId": "exportConferenceRoom",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "enum": [
+                "capacity",
+                "room_name"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "listquery шүүлт (JSON мөр). Шүүх боломжтой: capacity: number, room_name: text, status: enum",
+            "in": "query",
+            "name": "filters",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "XLSX файл"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — Excel export",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/conference/rooms/meta": {
+      "get": {
+        "description": "ExposeMeta: true үед л mount хийгдэнэ.",
+        "operationId": "metaConferenceRoom",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "crud.Meta + can"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — meta",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/conference/rooms/options/{field}": {
+      "get": {
+        "operationId": "optionsConferenceRoom",
+        "parameters": [
+          {
+            "description": "Ref талбарын нэр; child-д `\u003cchild\u003e.\u003cfield\u003e`",
+            "in": "path",
+            "name": "field",
+            "required": true,
+            "schema": {
+              "enum": [
+                "equipment.item_id",
+                "manager_id",
+                "owner_id"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "description": "a,b,c (дээд 200); search/parent-ийг үл тооно",
+            "in": "query",
+            "name": "ids",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Parent-тэй талбарууд: owner_id",
+            "in": "query",
+            "name": "parent",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionList"
+                }
+              }
+            },
+            "description": "Сонголтууд (өөрийн org-ийнх)"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — ref сонголтууд",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/conference/rooms/query": {
+      "post": {
+        "operationId": "queryConferenceRoom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceRoomList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — жагсаалт (JSON body)",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/conference/rooms/{id}": {
+      "delete": {
+        "operationId": "deleteConferenceRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResult"
+                }
+              }
+            },
+            "description": "Устсан id"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — устгах",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      },
+      "get": {
+        "operationId": "getConferenceRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceRoom"
+                }
+              }
+            },
+            "description": "Мөр + children"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — дэлгэрэнгүй",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      },
+      "put": {
+        "operationId": "updateConferenceRoom",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConferenceRoomUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConferenceRoom"
+                }
+              }
+            },
+            "description": "Засагдсан мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Хурлын өрөө — засах",
+        "tags": [
+          "Хурлын өрөө"
+        ]
+      }
+    },
+    "/api/organization/tags": {
+      "get": {
+        "operationId": "listTag",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "description": "listquery шүүлт (JSON мөр)",
+            "in": "query",
+            "name": "filters",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — жагсаалт",
+        "tags": [
+          "Шошго"
+        ]
+      },
+      "post": {
+        "operationId": "createTag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            },
+            "description": "Үүссэн мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — үүсгэх",
+        "tags": [
+          "Шошго"
+        ]
+      }
+    },
+    "/api/organization/tags/meta": {
+      "get": {
+        "description": "ExposeMeta: true үед л mount хийгдэнэ.",
+        "operationId": "metaTag",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              }
+            },
+            "description": "crud.Meta + can"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — meta",
+        "tags": [
+          "Шошго"
+        ]
+      }
+    },
+    "/api/organization/tags/query": {
+      "post": {
+        "operationId": "queryTag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ListQuery"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagList"
+                }
+              }
+            },
+            "description": "Жагсаалт"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — жагсаалт (JSON body)",
+        "tags": [
+          "Шошго"
+        ]
+      }
+    },
+    "/api/organization/tags/{id}": {
+      "delete": {
+        "operationId": "deleteTag",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResult"
+                }
+              }
+            },
+            "description": "Устсан id"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — устгах",
+        "tags": [
+          "Шошго"
+        ]
+      },
+      "get": {
+        "operationId": "getTag",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            },
+            "description": "Мөр + children"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — дэлгэрэнгүй",
+        "tags": [
+          "Шошго"
+        ]
+      },
+      "put": {
+        "operationId": "updateTag",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tag"
+                }
+              }
+            },
+            "description": "Засагдсан мөр"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/Unprocessable"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "summary": "Шошго — засах",
+        "tags": [
+          "Шошго"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://api.example.mn"
+    }
+  ]
+}
