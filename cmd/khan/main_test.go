@@ -39,7 +39,9 @@ func TestSchemaDiffCommand(t *testing.T) {
 
 func TestUsageErrors(t *testing.T) {
 	var out bytes.Buffer
-	for _, args := range [][]string{nil, {"gen"}, {"schema", "nope"}, {"schema", "diff", "one"}} {
+	for _, args := range [][]string{nil, {"gen"}, {"schema", "nope"}, {"schema", "diff", "one"},
+		{"migrate"}, {"migrate", "nope"}, {"migrate", "up"}, {"migrate", "status"}, {"migrate", "up", "-dir", "/nonexistent-khan-dir"},
+		{"schema", "rls"}, {"schema", "rls", "-schema", "x", "-mode", "loose"}} {
 		if err := run(args, &out, &out); err == nil {
 			t.Errorf("%v: алдаа хүлээсэн", args)
 		}

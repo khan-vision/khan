@@ -44,6 +44,17 @@
 - seo
 - MySQL/MSSQL/Oracle
 
+## P0.5 — суурийн сайжруулалт ✅ (v0.3.0)
+
+- **tenant RLS + Guard**: KHA-272-ийн давтагдахаас сэргийлэх хоёр дахь хамгаалалт.
+- **migrate**: lock_timeout-той аюулгүй migration (10/07-ны `chat_bots` түгжээний давталтаас сэргийлнэ).
+- **auth**: JWT түлхүүр эргүүлэлт (10/29-нд secret солиход бүгд гарсан асуудлыг засна).
+- **obs**: request id, slog, access log, нууц далдлалт, health.
+- **events**: transactional outbox (Lambda-ийн after-hook алдагддаг асуудлыг засна).
+- **idempotency**, **db.UpdateVersioned**: давхар даралт болон зэрэг засварлалтын хамгаалалт.
+
+Go↔TS codegen нь `crud.Resource`-ийн тодорхойлолтоос хамаардаг тул `crud`-тэй хамт хийгдэнэ.
+
 ## Дараагийн package-ууд (P1+)
 
 - **auth**: HS256 issue/verify. Claim нэр (`id`, `login`, `role`, `org_id`, `extra_role`, `portal_only`, `sid`)

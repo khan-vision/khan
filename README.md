@@ -25,13 +25,18 @@ gorm postgres driver v1.6.3, golang-jwt v5.
 | Package | Төлөв | Үүрэг |
 |---|---|---|
 | `config` | ✅ | Typed тохиргоо. Env нэрс lambda-тай ижил (`DB_*`, `JWT_*`, `MAIL_*`, `FILE_MAX_SIZE`) |
-| `db` | ✅ | `Open`, pool (prod-д хэмжсэн анхдагч утгатай), libpq quote хийсэн DSN, `Tx` |
+| `db` | ✅ | `Open`, pool (prod-д хэмжсэн анхдагч утгатай), libpq quote хийсэн DSN, `Tx`, `UpdateVersioned` (optimistic lock, `ErrConflict`) |
 | `schema` | ✅ | Postgres introspection → `Catalog`, JSON snapshot, `Diff`, `Lint`, `GoType` |
 | `query` | ✅ | KvGrid list/filter/sort/paging/totals/export/bulk (main `app/listquery`-ээс зөөсөн) |
-| `tenant` | ✅ | org_id-г JWT-ээс авна, `Require`, `Middleware`, fail-closed GORM `Scope` |
+| `tenant` | ✅ | org_id-г JWT-ээс авна, `Require`, `Middleware`, fail-closed GORM `Scope`. Хоёр дахь хамгаалалт: Postgres RLS (`Tx`/`WithOrg` → `app.org_id`, `PolicySQL` soft/strict, `SystemTx`), org нөхцөлгүй query-г илрүүлэх GORM `Guard` plugin (Warn/Strict) |
+| `migrate` | ✅ | Хувилбартай forward-only SQL migration: lock_timeout/statement_timeout, advisory lock, checksum drift, `-- khan:no-transaction` |
+| `auth` | ✅ | HS256 JWT + түлхүүр эргүүлэлт (`kid`, өмнөх түлхүүр, kid-гүй хуучин token), `Required`/`Optional` middleware, `User(c)`, bcrypt, mutex-тэй `Limiter` (rate limit + өсөн нэмэгдэх lockout) |
+| `obs` | ✅ | `RequestID`, request-scoped slog, `AccessLog`, нууц далдлалт (`RedactString`, `ReplaceAttr`), `/healthz` + `/readyz`, `GormLogger` |
+| `events` | ✅ | Transactional outbox: `Publish(tx, Event)`, `Dispatcher` (at-least-once, SKIP LOCKED, retry/backoff/dead, `prefix.*`), `Purge`, `SchemaSQL` |
+| `idempotency` | ✅ | `Idempotency-Key` Fiber v3 middleware (JWT org/user scope, replay, 409/422, TTL), `Purge`, `SchemaSQL` |
 | `testkit` | ✅ | Local test DB guard, `TxDB` (rollback), fake/signed JWT |
-| `cmd/khan` | ✅ | `khan schema dump / lint / diff` |
-| `auth`, `access`, `crud`, `lookup`, `validate`, `cache`, `upload`, `audit` | ⏳ | → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| `cmd/khan` | ✅ | `khan schema dump / lint / diff / rls`, `khan migrate status / up` |
+| `access`, `crud` (+ Go↔TS codegen), `lookup`, `validate`, `cache`, `upload`, `audit` | ⏳ | → [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 ## Хэрэглээ
 
@@ -53,6 +58,39 @@ go run ./cmd/khan schema dump -env ../main/.env.test -schema finance,hr -o catal
 go run ./cmd/khan schema lint -schema finance
 go run ./cmd/khan schema diff old.json new.json
 ```
+
+Migration (`NNNN_description.sql` файлууд, `embed.FS` эсвэл `os.DirFS`):
+
+```go
+ms, err := migrate.Load(migrationsFS)
+applied, err := migrate.Up(ctx, gdb, ms, migrate.Options{}) // lock_timeout 5s, statement_timeout 15m
+```
+
+```bash
+go run ./cmd/khan migrate status -dir ./migrations -env .env
+go run ./cmd/khan migrate up -dir ./migrations -dry-run
+go run ./cmd/khan migrate up -dir ./migrations -lock-timeout 3s -lint-schema finance,hr
+```
+
+Migration бүр өөрийн транзакцид `SET LOCAL lock_timeout`-той ажиллана (hot хүснэгтийг удаан түгжихгүй).
+Файлын эхний мөр `-- khan:no-transaction` бол транзакцгүй (`CREATE INDEX CONCURRENTLY`; нэг statement).
+Хэрэглэгдсэн файл өөрчлөгдвөл (checksum) эсвэл DB-д байгаа хувилбар хавтсанд алга бол юу ч ажиллуулахгүй
+алдаа өгнө (`-allow-missing` / `Options.AllowMissing`). Хяналт: `khan.schema_migrations`. Зөвхөн урагшаа.
+
+## Tenant тусгаарлалт (RLS)
+
+```bash
+# org_id-тэй хүснэгт бүрт policy үүсгэж migration болгоно (эхлээд soft горимоор)
+go run ./cmd/khan schema rls -schema finance -mode soft -o migrations/0007_rls_finance.sql
+go run ./cmd/khan migrate up -dir migrations
+```
+
+```go
+gdb.Use(tenant.NewGuard(tenant.TenantTables(cat), tenant.GuardWarn, log.Printf)) // dev/test-д GuardStrict
+err := tenant.Tx(ctx, gdb, orgID, func(tx *gorm.DB) error { /* app.org_id тавигдсан */ return nil })
+```
+
+Superuser болон BYPASSRLS эрхтэй role-д RLS үйлчлэхгүй. Апп нь энгийн role-оор холбогдох ёстой.
 
 ## Тест
 

@@ -92,3 +92,24 @@ func TestWithEnvFileDoesNotOverrideEnv(t *testing.T) {
 		t.Fatal("байхгүй файлд алдаа хүлээсэн")
 	}
 }
+
+func TestJWTKeyringEnv(t *testing.T) {
+	cfg, err := Load(env(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.JWT.KeyID != "k1" || len(cfg.JWT.PreviousSecrets) != 0 {
+		t.Fatalf("анхдагч буруу: %+v", cfg.JWT)
+	}
+	cfg, err = Load(env(map[string]string{
+		"JWT_KEY_ID":           "k2",
+		"JWT_PREVIOUS_SECRETS": " k1:aaaa , bare-secret,, ",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.JWT.KeyID != "k2" || len(cfg.JWT.PreviousSecrets) != 2 ||
+		cfg.JWT.PreviousSecrets[0] != "k1:aaaa" || cfg.JWT.PreviousSecrets[1] != "bare-secret" {
+		t.Fatalf("буруу: %+v", cfg.JWT)
+	}
+}

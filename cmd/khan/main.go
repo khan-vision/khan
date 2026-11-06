@@ -3,8 +3,12 @@
 //	khan schema dump [-env .env] [-schema finance,hr] [-ignore t1,t2] [-o catalog.json]
 //	khan schema lint [-env .env] [-schema finance] [-tables finance.invoice,...]
 //	khan schema diff old.json new.json
+//	khan schema rls [-env .env] -schema finance [-mode soft|strict] [-o 0007_rls_finance.sql]
+//	khan migrate status -dir DIR [-env .env] [-table khan.schema_migrations]
+//	khan migrate up -dir DIR [-env .env] [-lock-timeout 5s] [-statement-timeout 15m] [-dry-run] [-lint-schema a,b]
 //
-// Бүх команд DB-ээс ЗӨВХӨН уншина (pg_catalog SELECT).
+// `schema` команд DB-ээс ЗӨВХӨН уншина (pg_catalog SELECT). `migrate up` нь DB-д бичнэ
+// (-dry-run нь зөвхөн pending жагсаана).
 package main
 
 import (
@@ -18,7 +22,10 @@ import (
 
 	"github.com/khan-vision/khan/config"
 	"github.com/khan-vision/khan/db"
+	"github.com/khan-vision/khan/migrate"
 	"github.com/khan-vision/khan/schema"
+	"github.com/khan-vision/khan/tenant"
+	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
@@ -28,6 +35,10 @@ const usage = `khan — Khan library CLI
   khan schema dump [-env FILE] [-schema a,b] [-exclude a,b] [-ignore t1,t2] [-no-views] [-o FILE]
   khan schema lint [-env FILE] [-schema a,b] [-tables s.t1,s.t2]
   khan schema diff OLD.json NEW.json
+  khan schema rls [-env FILE] -schema a,b [-mode soft|strict] [-o FILE]   (org_id-тэй хүснэгтийн RLS policy SQL)
+  khan migrate status -dir DIR [-env FILE] [-table NAME] [-allow-missing]
+  khan migrate up -dir DIR [-env FILE] [-table NAME] [-lock-timeout 5s] [-statement-timeout 15m]
+                  [-allow-missing] [-dry-run] [-lint-schema a,b]
 `
 
 func main() {
@@ -38,9 +49,20 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) < 2 || args[0] != "schema" {
+	if len(args) < 2 || (args[0] != "schema" && args[0] != "migrate") {
 		fmt.Fprint(stderr, usage)
 		return fmt.Errorf("команд буруу")
+	}
+	if args[0] == "migrate" {
+		switch args[1] {
+		case "status":
+			return migrateStatus(args[2:], stdout)
+		case "up":
+			return migrateUp(args[2:], stdout)
+		default:
+			fmt.Fprint(stderr, usage)
+			return fmt.Errorf("үл мэдэгдэх migrate команд %q", args[1])
+		}
 	}
 	switch args[1] {
 	case "dump":
@@ -49,6 +71,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return schemaLint(args[2:], stdout)
 	case "diff":
 		return schemaDiff(args[2:], stdout)
+	case "rls":
+		return schemaRLS(args[2:], stdout)
 	default:
 		fmt.Fprint(stderr, usage)
 		return fmt.Errorf("үл мэдэгдэх schema команд %q", args[1])
@@ -70,16 +94,21 @@ func addDBFlags(fs *flag.FlagSet) dbFlags {
 	}
 }
 
-func (f dbFlags) catalog() (*schema.Catalog, error) {
+// openDB — env файл (хоосон бол зөвхөн орчны хувьсагч)-аар DB нээнэ.
+func openDB(env string) (*gorm.DB, error) {
 	var opts []config.Option
-	if *f.env != "" {
-		opts = append(opts, config.WithEnvFile(*f.env))
+	if env != "" {
+		opts = append(opts, config.WithEnvFile(env))
 	}
 	cfg, err := config.Load(opts...)
 	if err != nil {
 		return nil, err
 	}
-	gdb, err := db.Open(cfg.DB, db.WithLogger(logger.Discard))
+	return db.Open(cfg.DB, db.WithLogger(logger.Discard))
+}
+
+func (f dbFlags) catalog() (*schema.Catalog, error) {
+	gdb, err := openDB(*f.env)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +193,173 @@ func schemaDiff(args []string, stdout io.Writer) error {
 	}
 	if len(changes) == 0 {
 		fmt.Fprintln(stdout, "ялгаагүй")
+	}
+	return nil
+}
+
+// schemaRLS — catalog-ийн org_id баганатай хүснэгт бүрт RLS policy DDL (migration
+// файл болгон хадгалж, `khan migrate up`-аар хэрэглэнэ).
+func schemaRLS(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("schema rls", flag.ContinueOnError)
+	df := addDBFlags(fs)
+	mode := fs.String("mode", "soft", "soft (app.org_id тавиагүй бол бүгд) | strict (тавиагүй бол юу ч үгүй)")
+	out := fs.String("o", "", "гаралтын файл (хоосон = stdout)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	var pm tenant.PolicyMode
+	switch *mode {
+	case "soft":
+		pm = tenant.PolicySoft
+	case "strict":
+		pm = tenant.PolicyStrict
+	default:
+		return fmt.Errorf("-mode soft|strict байх ёстой: %q", *mode)
+	}
+	if len(split(*df.schemas)) == 0 {
+		return fmt.Errorf("-schema заавал (бүх DB-д нэг дор RLS асаахгүй)")
+	}
+	*df.noViews = true
+	cat, err := df.catalog()
+	if err != nil {
+		return err
+	}
+	w := stdout
+	if *out != "" {
+		f, err := os.Create(*out)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		w = f
+	}
+	tables := tenant.TenantTables(cat)
+	fmt.Fprintf(w, "-- khan schema rls -mode %s: %d хүснэгт\n", *mode, len(tables))
+	for _, t := range tables {
+		sql, err := tenant.PolicySQLForTable(t, pm)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(w, "\n-- %s\n%s", t.QualifiedName(), sql)
+	}
+	return nil
+}
+
+type migrateFlags struct {
+	env, dir, table *string
+	allowMissing    *bool
+}
+
+func addMigrateFlags(fs *flag.FlagSet) migrateFlags {
+	return migrateFlags{
+		env:          fs.String("env", "", "env файл (орчны хувьсагч давуу)"),
+		dir:          fs.String("dir", "", "migration SQL файлуудын хавтас (заавал)"),
+		table:        fs.String("table", "", "хяналтын хүснэгт (анхдагч "+migrate.DefaultTable+")"),
+		allowMissing: fs.Bool("allow-missing", false, "DB-д байгаа боловч хавтсанд алга болсон хувилбарыг зөвшөөрөх"),
+	}
+}
+
+// load — хавтсаас migration унших ба DB нээх.
+func (f migrateFlags) load() ([]migrate.Migration, *gorm.DB, migrate.Options, error) {
+	opts := migrate.Options{Table: *f.table, AllowMissing: *f.allowMissing}
+	if *f.dir == "" {
+		return nil, nil, opts, fmt.Errorf("-dir заавал")
+	}
+	ms, err := migrate.Load(os.DirFS(*f.dir))
+	if err != nil {
+		return nil, nil, opts, err
+	}
+	gdb, err := openDB(*f.env)
+	if err != nil {
+		return nil, nil, opts, err
+	}
+	return ms, gdb, opts, nil
+}
+
+func migrateStatus(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("migrate status", flag.ContinueOnError)
+	mf := addMigrateFlags(fs)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ms, gdb, opts, err := mf.load()
+	if err != nil {
+		return err
+	}
+	defer db.Close(gdb)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	st, err := migrate.StatusOf(ctx, gdb, ms, opts)
+	if err != nil {
+		return err
+	}
+	pending := 0
+	for _, s := range st {
+		if s.Applied {
+			fmt.Fprintf(stdout, "applied  %s  %s\n", s.File(), s.AppliedAt.Format(time.RFC3339))
+		} else {
+			fmt.Fprintf(stdout, "pending  %s\n", s.File())
+			pending++
+		}
+	}
+	fmt.Fprintf(stdout, "%d migration, %d pending\n", len(st), pending)
+	return nil
+}
+
+func migrateUp(args []string, stdout io.Writer) error {
+	fs := flag.NewFlagSet("migrate up", flag.ContinueOnError)
+	mf := addMigrateFlags(fs)
+	lockTimeout := fs.Duration("lock-timeout", migrate.DefaultLockTimeout, "migration бүрийн lock_timeout (<0 = унтраана)")
+	stmtTimeout := fs.Duration("statement-timeout", migrate.DefaultStatementTimeout, "migration бүрийн statement_timeout (<0 = унтраана)")
+	dryRun := fs.Bool("dry-run", false, "ажиллуулахгүй, зөвхөн pending жагсаах")
+	lint := fs.String("lint-schema", "", "up-ийн дараа эдгээр schema-г lint хийх (таслалаар); зөрчил = алдаа")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	ms, gdb, opts, err := mf.load()
+	if err != nil {
+		return err
+	}
+	defer db.Close(gdb)
+	opts.LockTimeout, opts.StatementTimeout = *lockTimeout, *stmtTimeout
+	opts.Logf = func(format string, a ...any) { fmt.Fprintf(stdout, format+"\n", a...) }
+	ctx := context.Background()
+
+	if *dryRun {
+		pend, err := migrate.Pending(ctx, gdb, ms, opts)
+		if err != nil {
+			return err
+		}
+		for _, m := range pend {
+			fmt.Fprintf(stdout, "pending  %s\n", m.File())
+		}
+		fmt.Fprintf(stdout, "%d pending (dry-run, юу ч ажиллуулаагүй)\n", len(pend))
+		return nil
+	}
+	applied, err := migrate.Up(ctx, gdb, ms, opts)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(stdout, "%d migration хэрэглэгдлээ\n", len(applied))
+
+	if schemas := split(*lint); len(schemas) > 0 {
+		lctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		cat, err := schema.Introspect(lctx, gdb, schema.Filter{Schemas: schemas})
+		if err != nil {
+			return err
+		}
+		count := 0
+		for _, t := range cat.Tables {
+			for _, issue := range schema.Lint(t) {
+				fmt.Fprintln(stdout, issue)
+				count++
+			}
+		}
+		if count > 0 {
+			return fmt.Errorf("%d lint зөрчил", count)
+		}
+		fmt.Fprintln(stdout, "lint: зөрчилгүй")
 	}
 	return nil
 }

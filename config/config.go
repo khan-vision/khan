@@ -85,6 +85,12 @@ func (d DB) Validate() error {
 // JWT — access token.
 type JWT struct {
 	Secret string // JWT_SECRET (≥ MinJWTSecretLen)
+	// KeyID — идэвхтэй түлхүүрийн id (JWT_KEY_ID, анхдагч "k1"); token header `kid`-д бичигдэнэ.
+	KeyID string
+	// PreviousSecrets — эргүүлэлтийн өмнөх түлхүүрүүд (JWT_PREVIOUS_SECRETS, таслалаар
+	// тусгаарласан). Элемент бүр `kid:secret` эсвэл зөвхөн `secret` (kid-гүй бол
+	// auth.KeyringFromConfig "prev1", "prev2" … нэр өгнө). Зөвхөн шалгахад хэрэглэнэ.
+	PreviousSecrets []string
 	// TTL — access token-ий хугацаа. JWT_TTL нь lambda-тай адил ЦАГААР.
 	TTL                 time.Duration
 	DisableCookieSecure bool // JWT_DISABLE_COOKIE_SECURE (зөвхөн local dev)
@@ -180,6 +186,8 @@ func Load(opts ...Option) (Config, error) {
 		},
 		JWT: JWT{
 			Secret:              r.str("JWT_SECRET", ""),
+			KeyID:               r.str("JWT_KEY_ID", "k1"),
+			PreviousSecrets:     r.list("JWT_PREVIOUS_SECRETS"),
 			TTL:                 time.Duration(r.integer("JWT_TTL", 24)) * time.Hour,
 			DisableCookieSecure: r.boolean("JWT_DISABLE_COOKIE_SECURE", false),
 		},
@@ -221,6 +229,21 @@ func (r *reader) str(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// list — таслалаар тусгаарласан жагсаалт; хоосон элементийг хасна.
+func (r *reader) list(key string) []string {
+	v, ok := r.raw(key)
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func (r *reader) integer(key string, def int) int {
