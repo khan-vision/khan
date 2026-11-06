@@ -136,3 +136,20 @@ func claimBool(v any) bool {
 	}
 	return false
 }
+
+// RoleIs — JWT-ийн role нь өгсөн утгуудын аль нэг эсэхийг шалгах predicate (`crud.Resource.SystemPrincipal`).
+// ERP: `SystemPrincipal: auth.RoleIs(4)` (sysadmin = org_id-гүй байж болох цорын ганц role).
+func RoleIs(roles ...int) func(c fiber.Ctx) bool {
+	return func(c fiber.Ctx) bool {
+		u, ok := User(c)
+		if !ok {
+			return false
+		}
+		for _, r := range roles {
+			if u.Role == r {
+				return true
+			}
+		}
+		return false
+	}
+}

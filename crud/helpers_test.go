@@ -43,6 +43,11 @@ func canByRole(c fiber.Ctx, a Action) bool {
 // claimsMW — тестийн толгойгоос (X-T-*) JWT claims тавина. Production-ийн X-Org-ID БИШ.
 func claimsMW(c fiber.Ctx) error {
 	org := c.Get("X-T-Org")
+	if org == "" && c.Get("X-T-NoOrg") == "1" { // org_id claim-гүй token (sysadmin / single-tenant)
+		role := 1
+		fmt.Sscan(c.Get("X-T-Role"), &role)
+		c.Locals(tenant.LocalsKey, &jwt.Token{Claims: jwt.MapClaims{"id": "99999999-0000-0000-0000-000000000001", "role": role}, Valid: true})
+	}
 	if org != "" {
 		role := 1
 		fmt.Sscan(c.Get("X-T-Role"), &role)

@@ -20,9 +20,15 @@ func TestOrgID_OnlyFromJWT(t *testing.T) {
 		want   string
 		status int
 	}{
-		{"jwt org", jwt.MapClaims{"org_id": "org-A"}, "org-A", 200},
+		{"jwt org", jwt.MapClaims{"org_id": "aaaaaaaa-0000-4000-8000-00000000000a"}, "aaaaaaaa-0000-4000-8000-00000000000a", 200},
 		{"no token", nil, "", 401},
 		{"empty org", jwt.MapClaims{"org_id": ""}, "", 401},
+		{"upper uuid -> lower", jwt.MapClaims{"org_id": "AAAAAAAA-0000-4000-8000-00000000000A"}, "aaaaaaaa-0000-4000-8000-00000000000a", 200},
+		{"non-uuid", jwt.MapClaims{"org_id": "org-A"}, "", 401},
+		{"braced uuid", jwt.MapClaims{"org_id": "{aaaaaaaa-0000-4000-8000-00000000000a}"}, "", 401},
+		{"no dashes", jwt.MapClaims{"org_id": "aaaaaaaa00004000800000000000000a"}, "", 401},
+		{"non-hex", jwt.MapClaims{"org_id": "gggggggg-0000-4000-8000-00000000000a"}, "", 401},
+		{"zero upper", jwt.MapClaims{"org_id": ZeroUUID + " "}, "", 401},
 		{"zero uuid", jwt.MapClaims{"org_id": ZeroUUID}, "", 401},
 		{"non-string org", jwt.MapClaims{"org_id": 5.0}, "", 401},
 	}
@@ -73,16 +79,16 @@ func TestScope(t *testing.T) {
 	type row struct{ ID string }
 	db := dryDB(t)
 
-	stmt := db.Table("finance.invoice i").Scopes(Scope("i", "org-A")).Find(&[]row{}).Statement
-	if sql := stmt.SQL.String(); !strings.Contains(sql, "i.org_id = $1") || stmt.Vars[0] != "org-A" {
+	stmt := db.Table("finance.invoice i").Scopes(Scope("i", "aaaaaaaa-0000-4000-8000-00000000000a")).Find(&[]row{}).Statement
+	if sql := stmt.SQL.String(); !strings.Contains(sql, "i.org_id = $1") || stmt.Vars[0] != "aaaaaaaa-0000-4000-8000-00000000000a" {
 		t.Fatalf("scope sql=%q vars=%v", sql, stmt.Vars)
 	}
 
 	for name, tc := range map[string]struct{ alias, org string }{
 		"empty org":  {"i", ""},
 		"zero uuid":  {"i", ZeroUUID},
-		"bad alias":  {"i; DROP", "org-A"},
-		"upper case": {"I", "org-A"},
+		"bad alias":  {"i; DROP", "aaaaaaaa-0000-4000-8000-00000000000a"},
+		"upper case": {"I", "aaaaaaaa-0000-4000-8000-00000000000a"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := dryDB(t).Table("x").Scopes(Scope(tc.alias, tc.org)).Find(&[]row{}).Error; err == nil {
@@ -96,7 +102,7 @@ func TestMiddleware(t *testing.T) {
 	app := fiber.New()
 	app.Use(func(c fiber.Ctx) error {
 		if c.Get("X-Test-Token") == "1" {
-			c.Locals(LocalsKey, &jwt.Token{Claims: jwt.MapClaims{"org_id": "org-A"}})
+			c.Locals(LocalsKey, &jwt.Token{Claims: jwt.MapClaims{"org_id": "aaaaaaaa-0000-4000-8000-00000000000a"}})
 		}
 		return c.Next()
 	}, Middleware())
@@ -111,7 +117,7 @@ func TestMiddleware(t *testing.T) {
 	req.Header.Set("X-Test-Token", "1")
 	resp, _ := app.Test(req)
 	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 || string(body) != "org-A" {
+	if resp.StatusCode != 200 || string(body) != "aaaaaaaa-0000-4000-8000-00000000000a" {
 		t.Fatalf("status=%d body=%q", resp.StatusCode, body)
 	}
 }

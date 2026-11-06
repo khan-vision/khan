@@ -57,7 +57,7 @@ SELECT pg_advisory_xact_lock(hashtext('khan.audit_log.schema'));
 CREATE SCHEMA IF NOT EXISTS khan;
 CREATE TABLE IF NOT EXISTS khan.audit_log (
 	id         bigserial PRIMARY KEY,
-	org_id     uuid NOT NULL,
+	org_id     uuid,
 	resource   text NOT NULL,
 	record_id  text NOT NULL,
 	action     text NOT NULL,
@@ -77,6 +77,15 @@ BEGIN
 			WHERE d.adrelid = 'khan.audit_log'::regclass AND a.attname = 'created_at'
 			AND pg_get_expr(d.adbin, d.adrelid) NOT LIKE 'clock_timestamp()%') THEN
 		ALTER TABLE khan.audit_log ALTER COLUMN created_at SET DEFAULT clock_timestamp();
+	END IF;
+END
+$$;
+DO $$
+BEGIN
+	-- org_id NULL (single-tenant / org-гүй actor) зөвшөөрөх: хуучин NOT NULL-ыг нэг л удаа авна.
+	IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'khan.audit_log'::regclass
+			AND attname = 'org_id' AND attnotnull) THEN
+		ALTER TABLE khan.audit_log ALTER COLUMN org_id DROP NOT NULL;
 	END IF;
 END
 $$;
@@ -165,7 +174,10 @@ func (a Action) Label() string {
 
 // Entry — нэг audit бичлэг.
 type Entry struct {
-	OrgID    string // заавал (uuid); zero UUID хориотой
+	OrgID string // заавал (uuid); zero UUID хориотой. NoOrg үед хоосон байх ёстой
+	// NoOrg — org-гүй actor (single-tenant төсөл, эсвэл org_id-гүй sysadmin): org_id NULL-аар бичигдэнэ.
+	// Ил тод тэмдэг шаардсан нь multi-tenant кодод OrgID-г мартаж NULL бичихээс сэргийлнэ (fail-closed).
+	NoOrg    bool
 	Resource string // "finance.invoice" (crud.Resource.Name)
 	RecordID string // мөрийн id (текст)
 	Action   Action
@@ -189,7 +201,9 @@ const (
 
 func (e Entry) validate() error {
 	switch {
-	case e.OrgID == "" || e.OrgID == tenant.ZeroUUID:
+	case e.NoOrg && e.OrgID != "":
+		return fmt.Errorf("%w: NoOrg үед OrgID хоосон байх ёстой", ErrInvalidEntry)
+	case !e.NoOrg && (e.OrgID == "" || e.OrgID == tenant.ZeroUUID):
 		return fmt.Errorf("%w: OrgID хоосон", ErrInvalidEntry)
 	case len(e.Resource) > maxResource || !resourceRe.MatchString(e.Resource):
 		return fmt.Errorf("%w: Resource %q", ErrInvalidEntry, e.Resource)
@@ -266,7 +280,7 @@ func RecordMany(tx *gorm.DB, entries []Entry) error {
 	}
 
 	const cols = `(org_id, resource, record_id, action, actor_id, actor_role, ip, user_agent, request_id, changes, snapshot)`
-	const ph = `(?::uuid, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?::jsonb, ?::jsonb)`
+	const ph = `(NULLIF(?, '')::uuid, ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), NULLIF(?, ''), ?::jsonb, ?::jsonb)`
 	const chunk = 500 // 11 параметр × 500 < 65535
 	for start := 0; start < len(rows); start += chunk {
 		end := min(start+chunk, len(rows))

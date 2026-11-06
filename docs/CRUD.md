@@ -104,27 +104,68 @@ Zero утга = `ScopeTenant` — дээрх 1–12 инвариант БАЙТ-
 - **Children:** child мөр эцгийнхээ эзэмшигчийг дагана (системийн эцэг → child `org_id NULL`, child хүснэгтийн `org_id` NULLABLE байх ёстой).
   Унших нь `(org_id = ? OR org_id IS NULL) AND FK = ?`. Child-ийг эцгээс нь тусад нь засах route байхгүй тул системийн child нь эцгийн 403-аар хамгаалагдана.
 - **Unique:** байгууллагын мөр өөрийн + системийн мөртэй давхцахгүй (харагдах бүх мөр; системийн утга нийтэд ил тул алдагдал биш); системийн мөр
-  зөвхөн системийн мөртэй харьцуулагдана. Өөр org-ийн утга хэзээ ч шалгагдахгүй, илчлэгдэхгүй. DB-ийн `UNIQUE (org_id, col)` нь NULL org-ийг
+  зөвхөн системийн мөртэй харьцуулагдана. Өөр org-ийн утга хэзээ ч шалгагдахгүй, илчлэгдэхгүй. **Анхаар:** sysadmin системийн утга (ж: код `X`) үүсгэвэл
+  байгууллагын дараагийн POST/PUT дээр ижил утга 422 өгнө (ойлгомжгүй давхцлаас сэргийлж шалгалтыг хэвээр хадгална); мессеж нь өөрийн мөртэй
+  давхцахаас ялгаатай — «… нь системд нөөцлөгдсөн утга тул ашиглах боломжгүй» (өөр org-ийн мөрийг ил гаргахгүй). DB-ийн `UNIQUE (org_id, col)` нь NULL org-ийг
   давхардуулж болох тул системийн мөрөнд `NULLS NOT DISTINCT` (эсвэл `WHERE org_id IS NULL` partial) index зөвлөнө.
 - **Cache:** түлхүүр/ETag нь org бүрт тусдаа хэвээр БА `_system` namespace-ийн generation (resource + `DependsOn`)-ийг агуулна. Системийн мөрийн бичилт
-  `_system`-ийг bump хийж бүх org-ийн cache/ETag-ийг хүчингүй болгоно; өөрийн org-ийн бичилт зөвхөн өөрийн org-ийг. Хязгаарлалт: Shared resource-д
-  `DependsOn` хийдэг БИШ resource-ийн cache системийн бичилтээр хүчингүй болохгүй (TTL хязгаарлана).
-- **Audit/Event:** `khan.audit_log.org_id NOT NULL` тул системийн мөрийн өөрчлөлт нь **үйлдэл хийгчийн org**-д бичигдэнэ; `/history` org-оор тусгаарлагдсан тул
-  бусад org sysadmin-ий түүхийг харахгүй. Event: `OrgID` = үйлдэл хийгчийн org, `payload.system = true`, `payload.org_id = null`.
+  `_system`-ийг bump хийж бүх org-ийн cache/ETag-ийг хүчингүй болгоно; өөрийн org-ийн бичилт зөвхөн өөрийн org-ийг. `Cache.DependsOn`-той
+  БУСАД scope-ын (Tenant/Shared) resource-ийн түлхүүр нь dependency бүрийн `_system` БА `_global` generation-ийг мөн агуулна: dependency нь
+  Shared бол системийн бичилтээр, Global бол глобал бичилтээр dependent-ийн cache хүчингүй болно (өмнөх «TTL хүртэл хуучирна» хязгаарлалт арилсан).
+  Org-гүй (`events.Event.OrgID == ""`) event-ийг `cache.BumpOnEvents` нь `_system` + `_global` namespace-д bump хийнэ.
+- **Audit/Event:** `khan.audit_log.org_id` системийн мөрийн өөрчлөлтөд **үйлдэл хийгчийн org** (NOT NULL-тай адил) байна — аудит нь «хэн хийсэн»
+  мэдээлэл, `/history` org-оор тусгаарлагдсан тул бусад org sysadmin-ий түүхийг харахгүй. Харин **event-ийн `OrgID` нь ХООСОН (outbox `org_id` NULL)**:
+  системийн/глобал мөр аль нэг байгууллагын event БИШ (org-оор чиглүүлдэг consumer sysadmin-ий org-ийн event гэж андуурахгүй),
+  `payload.system = true`, `payload.org_id = null`.
 - Hook: `Ctx.System = true` үед `Ctx.OrgID` нь үйлдэл хийгчийн org хэвээр — hook системийн мөрийг org-ийн өгөгдөлтэй холбохгүй байхыг өөрөө шалгана.
   `ListQuery`/`DetailQuery` нь org-ийн нөхцөл өөрөө нэмж БОЛОХГҮЙ (crud `(alias.org_id = ? OR alias.org_id IS NULL)`-г нэмнэ).
 - Мөрийн `org_id` нь detail/list хариунд `null` (FE read-only гэж таних). `tenant.Guard`: `tenant.SharedCond` хэлбэр, `tenant.SystemRow(tx)`-ээр
   тэмдэглэсэн statement-ийг scope-той гэж хүлээн авна (Strict горимд ч).
 
 **ScopeGlobal:**
-- Нэвтрэлт (JWT org, audit/event-д хэрэгтэй) + `Can(read)` заавал. Хүснэгт, child хүснэгтэд `org_id` байхгүй; `Ref` нь `Tenant: TenantOff()` байх ёстой (Mount алдаа).
+- Нэвтрэлт + `Can(read)` заавал. JWT org нь audit-д л хэрэгтэй (event-д org байхгүй); org_id-гүй JWT нь `SystemPrincipal` таарвал (§2.2) ажиллана. Хүснэгт, child хүснэгтэд `org_id` байхгүй; `Ref` нь `Tenant: TenantOff()` байх ёстой (Mount алдаа).
 - Бичилт БҮХ байгууллагад нөлөөлнө: `GlobalWrites: true` ил тод баталгаажуулалгүйгээр POST/PUT/DELETE/bulk route mount хийгдэхгүй (`can.create/update/delete = false`),
   `Bulk` нь `GlobalWrites`-гүйгээр Mount алдаа. **`Can` нь бичих үйлдэлд sysadmin-д л true байх ёстой** (crud tenant-ээс ялгах боломжгүй).
 - Mount алдаа: `RLS`, `SystemCan`, `Cache.DependsOn`, tenant-scoped `Ref`. `GlobalWrites` нь Global биш resource-д алдаа.
 - Cache namespace `_global` (org-оос үл хамаарна: нэг org-ийн бичилт бүх org-ийн cache-ийг хүчингүй болгоно; `can` cache-д орохгүй, хүсэлт бүрт). `ListQuery` org/хэрэглэгчээс
   хамаарсан өгөгдөл буцааж болохгүй.
-- Audit/Event: үйлдэл хийгчийн org-д (`payload.scope = "global"`, `org_id` байхгүй). `tenant.TenantTables` нь `org_id`-гүй хүснэгтийг агуулдаггүй тул Guard/RLS
+- Audit: үйлдэл хийгчийн org-д. Event: `OrgID` хоосон (NULL), `payload.scope = "global"`, `org_id` байхгүй. `tenant.TenantTables` нь `org_id`-гүй хүснэгтийг агуулдаггүй тул Guard/RLS
   Global хүснэгтэд хүрэхгүй.
+### 2.2 Org-гүй принсипал (`Resource.SystemPrincipal`) ба single-tenant
+
+**ERP дүрэм (owner 2026-11-06):** org_id NULL / JWT-д org байхгүй нь ЗӨВХӨН role = 4 (sysadmin)-д хүчинтэй; бусад нь org-гүй бол 401 (fail-closed).
+Үүнийг library-д тохируулдаг дүрэм болгосон: `Resource.SystemPrincipal func(c fiber.Ctx) bool` (nil = org-гүй хүсэлт бүх scope-д 401, одоогийн зан үйл).
+ERP: `SystemPrincipal: auth.RoleIs(4)`.
+
+| JWT | `ScopeTenant` | `ScopeShared` | `ScopeGlobal` |
+|---|---|---|---|
+| org-тэй (UUID) | өөрчлөлтгүй | өөрчлөлтгүй | өөрчлөлтгүй |
+| org-гүй + `SystemPrincipal` ✓ | **401** (Tenant-д `SystemPrincipal` өгвөл Mount алдаа) | унших = зөвхөн системийн мөр; `POST /system`, системийн мөрийн PUT/DELETE (`SystemCan`-тай); энгийн мөр үүсгэх 401; tenant мөр 404 | бүх endpoint (`Can` хэвээр) |
+| org-гүй + энгийн | 401 | 401 | 401 |
+
+- Org-гүй үед `Ctx.OrgID == ""`; audit `org_id NULL` (`audit.Entry.NoOrg`), event `OrgID` хоосон, cache namespace `_system` (Shared) / `_global`.
+- `SystemPrincipal` нь `Can`/`SystemCan`-ийг ОРЛОХГҮЙ — аль хэдийн шаардагдсан эрх хэвээр.
+- `tenant.OrgID` нь claim-ийг **каноник UUID** (8-4-4-4-12 hex) байхыг шаардаж ҮРГЭЛЖ жижиг үсэгтэй буцаана; UUID биш claim → `ErrNoOrg` (fail-closed).
+  Ownership харьцуулалт (`rowOwner`) том/жижиг үсэг үл ялгана (SQL uuid-тай ижил).
+- `tenant.Guard`: `SharedCond` нь зөвхөн SELECT-д org-scope; UPDATE/DELETE нь `org_id = ?` эсвэл `tenant.SystemRow` шаардана.
+
+## Single-tenant төслүүд (org_id-гүй)
+
+khan-г `org_id` багана огт байхгүй төсөлд хэрэглэхэд: `ScopeGlobal` = single-tenant scope. Давтахгүйн тулд:
+
+```go
+r := (&crud.Resource[Row]{Name: "app.item", Table: "app.item", Fields: ..., Can: can, DB: db}).SingleTenant()
+// = Scope: ScopeGlobal, GlobalWrites: true, SystemPrincipal: crud.AnyPrincipal   (унших-л бол дараа нь r.GlobalWrites = false)
+```
+
+- JWT-д org_id шаардахгүй (нэвтэрсэн байхад л хангалттай); эрхийг `Can` шийднэ. Тусдаа `Defaults` глобал байхгүй (race/нууц төлөв үүсгэхгүй).
+- **audit:** `khan.audit_log.org_id` NULLABLE болсон (`SchemaSQL` нь хуучин NOT NULL-ыг нэг л удаа авна — идемпотент). org-гүй бичлэг `Entry.NoOrg = true`
+  (crud үүнийг автоматаар тавина); `Entry{OrgID: ""}` NoOrg-гүй бол хэвээр алдаа (multi-tenant код org мартаж NULL бичихээс сэргийлнэ). Унших: `Filter.NoOrg`.
+- **events:** `OrgID` хоосон = NULL org (хэвийн). **cache:** тогтмол `_global` namespace; `BumpOnEvents` org-гүй event-ийг дэмжинэ.
+- **idempotency / jobs:** org хоосон ('' / NULL) аль хэдийн зөвшөөрөгдсөн.
+- **access.Policy:** (org, user) identity шаарддаг (`tenant.OrgID`) тул single-tenant төсөлд ашиглахгүй — `Can`-ээ өөрөө бич.
+  `tenant.Guard`/RLS нь `org_id` баганатай хүснэгтэд л үйлчилнэ (single-tenant-д ашиглах хэрэггүй).
+
 - `Meta.Scope` ("tenant"|"shared"|"global"), `SystemWrites`, `GlobalWrites` нь `GET /meta`, codegen (TS `<camel>Scope` + comment, OpenAPI description/`x-khan-scope`/`POST …/system`)-д гарна.
 
 ## 3. Go API
@@ -477,6 +518,11 @@ Cleanup: үүсгэсэн мөрийг API-аар (DELETE) устгана (best 
 | 28 | Audit/event нь үйлдэл хийгчийн org-д (audit.org_id NOT NULL); Global event payload-д org_id алга | Audit схем, бусад org-ийн түүх ил гарахгүй |
 | 29 | `tenant.SharedCond`, `tenant.SystemRow`, Guard-ийн shared нөхцөл таних, `PolicyOptions.SystemRows` (унших `FOR SELECT` policy), `lookup.Spec.Shared`/`TenantScoped()`, `query.BulkSpec.NoOrg` | Hybrid хүснэгтийг Guard/RLS/lookup/bulk-д үнэнчээр дэмжих |
 | 30 | `Shared + SystemCan + RLS` Mount алдаа; Global + RLS/Cache.DependsOn/tenant Ref Mount алдаа | Системийн мөр бичихэд RLS bypass хэрэгтэй (бүтэн транзакцыг bypass-д оруулахгүй); Global кэш нь org хооронд холилдох эрсдэл |
+
+| 31 | `tenant.OrgID` каноник UUID → жижиг үсэг (UUID биш = `ErrNoOrg`); `rowOwner` том/жижиг үсэг үл ялгана; Guard-ийн `SharedCond` зөвхөн SELECT-д | JWT-ийн том үсэгтэй org өөрийн Shared мөрөө 404 болгодог; hand-written UPDATE/DELETE системийн мөрийг өөрчилж болдог |
+| 32 | `Cache.DependsOn` нь dependency-ийн `_system`+`_global` generation-ийг түлхүүрт оруулна; `BumpOnEvents` org-гүй event | Shared/Global dependency-ийн системийн/глобал бичилтээр dependent хуучирдаг байсан |
+| 33 | Системийн/глобал мөрийн event `OrgID` хоосон; Unique-ийн «системд нөөцлөгдсөн» мессеж | Consumer sysadmin-ий org-ийн event гэж андуурах; ойлгомжгүй 422 |
+| 34 | `Resource.SystemPrincipal`, `auth.RoleIs`, `crud.AnyPrincipal`, `Resource.SingleTenant()`, `audit.Entry.NoOrg`/`Filter.NoOrg` (`audit_log.org_id` NULLABLE); §2.2 | Org-гүй sysadmin (role 4) ба single-tenant төсөл |
 
 **Unique-ийн шаардлага:** `Unique: true` талбар нь апп түвшний шалгалт (TOCTOU) тул DB-д заавал
 `UNIQUE (org_id, col) [WHERE deleted_at IS NULL]` index байх ёстой — org_id-гүй global index бусад байгууллагад тухайн

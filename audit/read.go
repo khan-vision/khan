@@ -26,6 +26,7 @@ var ErrPageTooDeep = errors.New("audit: page хэт гүн — before_id (keyset
 // Filter — түүх унших шүүлт. OrgID ЗААВАЛ (fail-closed): байгууллага хоорондын түүх хэзээ ч холилдохгүй.
 type Filter struct {
 	OrgID     string
+	NoOrg     bool   // true бол org_id IS NULL мөрүүд (OrgID хоосон байх ёстой); org-гүй actor
 	Resource  string // хоосон бол бүх resource
 	RecordID  string
 	ActorID   string
@@ -113,8 +114,11 @@ func List(ctx context.Context, db *gorm.DB, f Filter) (Page, error) {
 	if db == nil {
 		return Page{}, errors.New("audit: *gorm.DB nil")
 	}
-	if f.OrgID == "" {
-		return Page{}, errors.New("audit: Filter.OrgID заавал")
+	if f.OrgID == "" && !f.NoOrg {
+		return Page{}, errors.New("audit: Filter.OrgID заавал (org-гүй бол NoOrg)")
+	}
+	if f.OrgID != "" && f.NoOrg {
+		return Page{}, errors.New("audit: Filter.NoOrg үед OrgID хоосон байх ёстой")
 	}
 	if f.Page < 1 {
 		f.Page = 1
@@ -129,7 +133,12 @@ func List(ctx context.Context, db *gorm.DB, f Filter) (Page, error) {
 		return Page{}, ErrPageTooDeep
 	}
 	base := func() *gorm.DB {
-		q := db.WithContext(ctx).Table(Table).Where("org_id = ?", f.OrgID)
+		q := db.WithContext(ctx).Table(Table)
+		if f.NoOrg {
+			q = q.Where("org_id IS NULL")
+		} else {
+			q = q.Where("org_id = ?", f.OrgID)
+		}
 		if f.Resource != "" {
 			q = q.Where("resource = ?", f.Resource)
 		}

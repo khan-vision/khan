@@ -354,9 +354,9 @@ func TestSharedEventsAndAudit(t *testing.T) {
 	sys := do(t, app, "POST", "/kinds/system", f.orgS, roleSys, map[string]any{"name": "Систем"})
 	mustStatus(t, sys, 201)
 	id := sys.str("id")
-	// event: OrgID = actor org, payload.system=true, org_id=null
-	if f.count(`SELECT count(*) FROM khan.outbox_events WHERE topic = 'test.kind.created' AND org_id = ? AND aggregate_id = ?
-		AND payload->>'system' = 'true' AND payload->'org_id' = 'null'::jsonb`, f.orgS, id) != 1 {
+	// event: OrgID = NULL (системийн мөр actor-ийн org-ийн event БИШ), payload.system=true, org_id=null
+	if f.count(`SELECT count(*) FROM khan.outbox_events WHERE topic = 'test.kind.created' AND org_id IS NULL AND aggregate_id = ?
+		AND payload->>'system' = 'true' AND payload->'org_id' = 'null'::jsonb`, id) != 1 {
 		t.Fatal("system created event")
 	}
 	own := do(t, app, "POST", "/kinds", f.orgA, roleAdmin, map[string]any{"name": "А"})

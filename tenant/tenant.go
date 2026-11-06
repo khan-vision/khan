@@ -19,6 +19,7 @@ package tenant
 import (
 	"errors"
 	"regexp"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -47,14 +48,40 @@ func Claims(c fiber.Ctx) (jwt.MapClaims, bool) {
 	return claims, ok
 }
 
+// CanonicalUUID — s нь каноник UUID хэлбэр (8-4-4-4-12 hex, том/жижиг үсэг) бол жижиг үсгээр
+// хэвшүүлсэн утгыг буцаана; өөр хэлбэр (хаалт, зураасгүй, urn: г.м.) бол ok=false.
+func CanonicalUUID(s string) (string, bool) {
+	if len(s) != 36 {
+		return "", false
+	}
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		switch {
+		case i == 8 || i == 13 || i == 18 || i == 23:
+			if ch != '-' {
+				return "", false
+			}
+		case ch >= '0' && ch <= '9', ch >= 'a' && ch <= 'f', ch >= 'A' && ch <= 'F':
+		default:
+			return "", false
+		}
+	}
+	return strings.ToLower(s), true
+}
+
 // OrgID — JWT claims доторх org_id. Client-ийн header/query-г огт хардаггүй.
+// Claim нь каноник UUID байх ёстой (том/жижиг үсэг хоёул болно); буцах утга ҮРГЭЛЖ жижиг үсэгтэй —
+// SQL-ийн uuid харьцуулалт том/жижиг үсэг үл ялгадаг тул string-ээр харьцуулдаг кодтой (ownership,
+// cache түлхүүр) тогтвортой таарна. UUID биш claim → ErrNoOrg (fail-closed).
 func OrgID(c fiber.Ctx) (string, error) {
 	claims, ok := Claims(c)
 	if !ok {
 		return "", ErrNoOrg
 	}
-	if v, ok := claims[ClaimOrgID].(string); ok && v != "" && v != ZeroUUID {
-		return v, nil
+	if v, ok := claims[ClaimOrgID].(string); ok {
+		if id, ok := CanonicalUUID(v); ok && id != ZeroUUID {
+			return id, nil
+		}
 	}
 	return "", ErrNoOrg
 }

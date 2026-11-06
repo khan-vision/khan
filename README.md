@@ -113,6 +113,11 @@ if err := rooms.Mount(app.Group("/api/organization/conference/rooms", authMW)); 
 `org_id` зөвхөн JWT-ээс; body-ийн `org_id`/`id` үл тоогдоно; өөр org-ийн мөр 404; ref нь тухайн org-д олдох ёстой (422);
 алдаа `{"error":"…","errors":{"field":["…"]}}` (KvForm `serverErrors.ts`).
 
+## Single-tenant төслүүд
+
+`org_id` баганагүй төсөлд `ScopeGlobal` + `(&crud.Resource[T]{...}).SingleTenant()` (JWT-д org шаардахгүй; `Can` эрхийг шийднэ).
+audit/events/cache org-гүй ажиллана. ERP-д org-гүй JWT зөвхөн `SystemPrincipal: auth.RoleIs(4)` (sysadmin)-д. Дэлгэрэнгүй: docs/CRUD.md §2.2.
+
 ## Cache (ETag / 304)
 
 ```go

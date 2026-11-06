@@ -88,7 +88,7 @@ func (e *engine) compileAudit(spec *AuditSpec, runtime bool) (*auditPlan, error)
 		h, err := audit.Handler(audit.HandlerConfig{
 			Resource: e.name,
 			DB:       func() *gorm.DB { return e.db() },
-			Org:      e.org,
+			Org:      e.resolveOrg,
 			Can:      func(c fiber.Ctx) bool { return e.allowed(c, ActionRead) },
 			RLS:      e.rls,
 			Visible:  e.auditVisible,
@@ -271,7 +271,7 @@ func (e *engine) auditEntry(c fiber.Ctx, orgID, id string, a audit.Action, befor
 		return audit.Entry{}, false
 	}
 	en := audit.Entry{
-		OrgID: orgID, Resource: e.name, RecordID: id, Action: a,
+		OrgID: orgID, NoOrg: orgID == "", Resource: e.name, RecordID: id, Action: a,
 		Meta: audit.MetaFrom(c), Changes: changes,
 	}
 	if e.audit.snapshot {

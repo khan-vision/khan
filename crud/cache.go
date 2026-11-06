@@ -109,7 +109,7 @@ func (e *engine) bumpCache(c fiber.Ctx, o owner) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Context()), 5*time.Second)
 	defer cancel()
 	orgs := []string{e.cacheOrg(o.org)}
-	if o.system {
+	if o.system && orgs[0] != systemCacheOrg {
 		orgs = append(orgs, systemCacheOrg)
 	}
 	for _, org := range orgs {
@@ -119,19 +119,34 @@ func (e *engine) bumpCache(c fiber.Ctx, o owner) {
 	}
 }
 
-// systemPart — ScopeShared resource-ийн cache түлхүүрийн нэмэлт хэсэг: `_system` namespace-ийн
-// generation (resource + DependsOn). Системийн мөр өөрчлөгдөхөд бүх org-ийн түлхүүр өөрчлөгдөнө.
-// Tenant/Global-д хоосон (түлхүүр өөрчлөгдөхгүй).
-func (e *engine) systemPart(ctx context.Context) (string, error) {
-	if e.scope != ScopeShared {
-		return "", nil
+// systemPart — cache түлхүүрийн нэмэлт хэсгүүд: org-оос ҮЛ ХАМААРАХ generation-ууд.
+//   - `sys=` — `_system` namespace: ScopeShared-д resource өөрөө + DependsOn; бусад scope-д зөвхөн DependsOn
+//     (Shared dependency-ийн системийн мөр өөрчлөгдөхөд Tenant/Shared dependent хүчингүй болно).
+//   - `glb=` — `_global` namespace-ийн DependsOn (Global dependency-ийн бичилт dependent-ийг хүчингүй болгоно).
+//
+// Хоосон DependsOn-той Tenant/Global-д хоосон (түлхүүр өөрчлөгдөхгүй). Дараалал тогтвортой (name эрэмбэлсэн).
+func (e *engine) systemPart(ctx context.Context) ([]string, error) {
+	var out []string
+	var names []string
+	if e.scope == ScopeShared {
+		names = append(names, e.name)
 	}
-	names := append([]string{e.name}, e.cache.dependsOn...)
-	v, err := e.cache.c.Version(ctx, systemCacheOrg, names...)
-	if err != nil {
-		return "", err
+	names = append(names, e.cache.dependsOn...)
+	if len(names) > 0 {
+		v, err := e.cache.c.Version(ctx, systemCacheOrg, names...)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, "sys="+v)
 	}
-	return "sys=" + v, nil
+	if len(e.cache.dependsOn) > 0 {
+		v, err := e.cache.c.Version(ctx, globalCacheOrg, e.cache.dependsOn...)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, "glb="+v)
+	}
+	return out, nil
 }
 
 // relayErr — аль хэдийн бичигдсэн (200 биш) хариуг cache-д хийхгүйгээр дамжуулах алдаа
@@ -234,8 +249,8 @@ func (e *engine) serveCached(c fiber.Ctx, orgID string, parts []string, can map[
 	sys, err := e.systemPart(ctx)
 	var res cache.Resolved
 	if err == nil {
-		if sys != "" {
-			parts = append(parts[:len(parts):len(parts)], sys)
+		if len(sys) > 0 {
+			parts = append(parts[:len(parts):len(parts)], sys...)
 		}
 		res, err = cp.c.Resolve(ctx, cache.Key{OrgID: orgID, Resource: e.name, DependsOn: cp.dependsOn, Parts: parts})
 	}

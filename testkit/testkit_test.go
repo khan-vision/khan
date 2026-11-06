@@ -36,7 +36,7 @@ func TestGuardLocal(t *testing.T) {
 
 func TestWithClaimsAndTenant(t *testing.T) {
 	app := fiber.New()
-	app.Get("/", WithClaims(Claims("u1", "org-A", 6)), func(c fiber.Ctx) error {
+	app.Get("/", WithClaims(Claims("u1", "aaaaaaaa-0000-4000-8000-00000000000a", 6)), func(c fiber.Ctx) error {
 		org, ok := tenant.Require(c)
 		if !ok {
 			return nil
@@ -48,14 +48,14 @@ func TestWithClaimsAndTenant(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "org-A" {
+	if string(body) != "aaaaaaaa-0000-4000-8000-00000000000a" {
 		t.Fatalf("body = %q", body)
 	}
 }
 
 func TestSignedToken(t *testing.T) {
 	secret := "0123456789abcdef0123456789abcdef"
-	s, err := SignedToken(secret, Claims("u1", "org-A", 6))
+	s, err := SignedToken(secret, Claims("u1", "aaaaaaaa-0000-4000-8000-00000000000a", 6))
 	if err != nil {
 		t.Fatal(err)
 	}

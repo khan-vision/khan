@@ -120,6 +120,10 @@ func (e *engine) checkUnique(tx *gorm.DB, o owner, selfID any, vals Values, errs
 			continue
 		}
 		q := tx.Table(e.table).Select("1").Where(quote(f.col)+" = ?", dbValue(v))
+		reserved := e.scope == ScopeShared && !o.system && o.org != ""
+		if reserved { // давхцал өөрийн мөртэй уу, системийн мөртэй юу гэдгийг ялгана (өөрийн нь эхэнд)
+			q = q.Select("org_id IS NULL").Order("org_id IS NULL ASC")
+		}
 		if o.system {
 			q = e.ownWhere(q, "", o)
 		} else {
@@ -130,6 +134,19 @@ func (e *engine) checkUnique(tx *gorm.DB, o owner, selfID any, vals Values, errs
 		}
 		if e.softDelete {
 			q = q.Where("deleted_at IS NULL")
+		}
+		if reserved {
+			var sys []bool
+			if err := q.Limit(1).Scan(&sys).Error; err != nil {
+				return err
+			}
+			switch {
+			case len(sys) > 0 && sys[0]:
+				errs.Add(f.Name, f.label+" нь системд нөөцлөгдсөн утга тул ашиглах боломжгүй")
+			case len(sys) > 0:
+				errs.Add(f.Name, f.label+" давхардсан байна")
+			}
+			continue
 		}
 		var hit []int
 		if err := q.Limit(1).Scan(&hit).Error; err != nil {
@@ -181,8 +198,12 @@ func (e *engine) publish(tx *gorm.DB, o owner, suffix, id string, vals Values) e
 		}
 		payload["values"] = out
 	}
+	evOrg := o.org
+	if o.system || e.scope == ScopeGlobal { // системийн/глобал мөр: тодорхой байгууллагын event БИШ (outbox org_id NULL)
+		evOrg = ""
+	}
 	return events.Publish(tx, events.Event{
-		OrgID: o.org, Topic: e.name + "." + suffix, AggregateType: e.name, AggregateID: id, Payload: payload,
+		OrgID: evOrg, Topic: e.name + "." + suffix, AggregateType: e.name, AggregateID: id, Payload: payload,
 	})
 }
 
@@ -201,8 +222,11 @@ func (e *engine) create(c fiber.Ctx) error { return e.createRow(c, false) }
 func (e *engine) createSystem(c fiber.Ctx) error { return e.createRow(c, true) }
 
 func (e *engine) createRow(c fiber.Ctx, system bool) error {
-	orgID, ok := e.org(c)
+	orgID, ok := e.resolveOrg(c)
 	if !ok {
+		return nil
+	}
+	if !system && e.scope != ScopeGlobal && !needOrg(c, orgID) { // org-гүй принсипал энгийн мөр үүсгэхгүй
 		return nil
 	}
 	if !e.allowed(c, ActionCreate) {
@@ -331,7 +355,7 @@ func (e *engine) createRow(c fiber.Ctx, system bool) error {
 // ─── PUT /:id ───
 
 func (e *engine) update(c fiber.Ctx) error {
-	orgID, ok := e.org(c)
+	orgID, ok := e.resolveOrg(c)
 	if !ok {
 		return nil
 	}
@@ -473,7 +497,7 @@ func (e *engine) update(c fiber.Ctx) error {
 // ─── DELETE /:id ───
 
 func (e *engine) remove(c fiber.Ctx) error {
-	orgID, ok := e.org(c)
+	orgID, ok := e.resolveOrg(c)
 	if !ok {
 		return nil
 	}
@@ -572,7 +596,7 @@ func (e *engine) deleteOne(c fiber.Ctx, tx *gorm.DB, orgID, uid string, idVal an
 // ─── GET /:id ───
 
 func (e *engine) get(c fiber.Ctx) error {
-	orgID, ok := e.org(c)
+	orgID, ok := e.resolveOrg(c)
 	if !ok {
 		return nil
 	}

@@ -22,8 +22,9 @@ import (
 //   - WHERE-ийн ДЭЭД түвшний AND нөхцөлүүдийн нэг нь `org_id = ?` / `org_id IN (?)`
 //     (`<alias>.org_id` ч болно). OR дотор байгаа org_id тооцогдохгүй.
 //   - Query tenant.Tx (app.org_id тавьсан RLS транзакц) эсвэл SystemTx дотор.
-//   - Hybrid (shared) хүснэгтийн унших нөхцөл яг `(org_id = ? OR org_id IS NULL)` (SharedCond) —
-//     org утга хоосон биш бол. Өөр OR-той хослол тооцогдохгүй.
+//   - Hybrid (shared) хүснэгтийн унших (SELECT) нөхцөл яг `(org_id = ? OR org_id IS NULL)` (SharedCond) —
+//     org утга хоосон биш бол. Өөр OR-той хослол тооцогдохгүй. UPDATE/DELETE-д SharedCond ХАНГАЛТГҮЙ
+//     (системийн мөрийг өөрчилж болзошгүй): `org_id = ?` эсвэл SystemRow хэрэгтэй.
 //   - Statement нь SystemRow-оор ил тод тэмдэглэгдсэн (системийн мөр, org_id IS NULL).
 //   - INSERT: мөр бүрт org_id утгатай (Create — struct/map-ийн org_id хоосон биш).
 //
@@ -99,7 +100,7 @@ func (g *Guard) check(op string) func(*gorm.DB) {
 		if !g.tables[table] || g.trusted(db) || isSystemRow(db) {
 			return
 		}
-		if whereHasOrg(db.Statement) {
+		if whereHasOrg(db.Statement, op == "SELECT") {
 			return
 		}
 		g.violation(db, op, table)
@@ -167,7 +168,7 @@ var orgCondRe = regexp.MustCompile(`(?i)(^|[\s(.,"])org_id"?\s*(=|in\b)`)
 // orRe — ДЭЭД түвшний OR (хаалтан доторхыг тооцохгүйгээр энгийн шалгалт).
 var orRe = regexp.MustCompile(`(?i)\sor\s`)
 
-func whereHasOrg(st *gorm.Statement) bool {
+func whereHasOrg(st *gorm.Statement, reads bool) bool {
 	c, ok := st.Clauses["WHERE"]
 	if !ok {
 		return false
@@ -177,26 +178,28 @@ func whereHasOrg(st *gorm.Statement) bool {
 		return false
 	}
 	for _, e := range w.Exprs {
-		if exprHasOrg(e) {
+		if exprHasOrg(e, reads) {
 			return true
 		}
 	}
 	return false
 }
 
-func exprHasOrg(e clause.Expression) bool {
+// exprHasOrg — reads=true (SELECT) үед SharedCond (системийн мөр орно) хүлээн авна; бичихэд
+// (UPDATE/DELETE) зөвхөн `org_id = ?`/IN — системийн мөрийг өөрчлөх нь SystemRow-оор ил тод байх ёстой.
+func exprHasOrg(e clause.Expression, reads bool) bool {
 	switch x := e.(type) {
 	case clause.Eq:
 		return isOrgColumn(x.Column) && x.Value != nil && x.Value != ""
 	case clause.IN:
 		return isOrgColumn(x.Column) && len(x.Values) > 0
 	case clause.Expr:
-		return (sqlHasOrg(x.SQL) || isSharedCond(x.SQL)) && !hasEmptyOrgVar(x.Vars)
+		return (sqlHasOrg(x.SQL) || (reads && isSharedCond(x.SQL))) && !hasEmptyOrgVar(x.Vars)
 	case clause.NamedExpr:
-		return (sqlHasOrg(x.SQL) || isSharedCond(x.SQL)) && !hasEmptyOrgVar(x.Vars)
+		return (sqlHasOrg(x.SQL) || (reads && isSharedCond(x.SQL))) && !hasEmptyOrgVar(x.Vars)
 	case clause.AndConditions:
 		for _, sub := range x.Exprs {
-			if exprHasOrg(sub) {
+			if exprHasOrg(sub, reads) {
 				return true
 			}
 		}

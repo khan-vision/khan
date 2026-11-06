@@ -26,18 +26,22 @@ func TestBumpOnEvents(t *testing.T) {
 	logs := 0
 	c2 := newCache(t, Config{Logf: func(string, ...any) { logs++ }})
 	h2 := BumpOnEvents(c2)
-	// org-гүй / цэггүй topic → алгасна (алдаа биш, retry-гүй)
-	if err := h2(bg, events.Delivered{OrgID: "", Topic: "a.b.c"}); err != nil {
-		t.Fatal(err)
-	}
+	// цэггүй topic → алгасна (алдаа биш, retry-гүй)
 	if err := h2(bg, events.Delivered{OrgID: "o", Topic: "ping"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := h2(bg, events.Delivered{OrgID: "o", Topic: ".x"}); err != nil {
 		t.Fatal(err)
 	}
-	if logs != 3 || c2.Stats().Bumps != 0 {
+	if logs != 2 || c2.Stats().Bumps != 0 {
 		t.Fatalf("logs=%d bumps=%d", logs, c2.Stats().Bumps)
+	}
+	// org-гүй event → _system + _global namespace
+	if err := h(bg, events.Delivered{OrgID: "", Topic: "a.b.c"}); err != nil {
+		t.Fatal(err)
+	}
+	if ver("_system", "a.b") != "g1" || ver("_global", "a.b") != "g1" || ver("o1", "a.b") != "g0" {
+		t.Fatal("org-гүй event _system/_global-г bump хийх ёстой")
 	}
 	// Bump алдвал handler алдаа буцаана (Dispatcher дахин оролдоно)
 	fs := newFlaky()

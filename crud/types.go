@@ -131,6 +131,12 @@ type Resource[T any] struct {
 	// байгууллагад нөлөөлнө тул заавал ил тод баталгаажуулна; Can нь sysadmin-д л true байх ёстой.
 	// false (анхдагч) → Global resource унших-л (бичих route mount хийгдэхгүй). Зөвхөн ScopeGlobal-д.
 	GlobalWrites bool
+	// SystemPrincipal — org_id-гүй JWT-тэй хэрэглэгчийг «системийн принсипал» (ж: sysadmin, role=4) гэж
+	// тодорхойлно. true үед ЗӨВХӨН ScopeGlobal (бүх endpoint) ба ScopeShared (`POST /system`, системийн мөрийн
+	// унших/PUT/DELETE — org=NULL) org-гүйгээр ажиллана. ScopeTenant-д нөлөөгүй (org заавал, 401). nil
+	// (анхдагч) → org-гүй хүсэлт бүх scope-д 401 (fail-closed). ERP: `auth.RoleIs(4)`; single-tenant
+	// төсөл: [AnyPrincipal] эсвэл [Resource.SingleTenant]. Can/SystemCan-ийг орлохгүй — тэдгээр хэвээр шаардагдана.
+	SystemPrincipal func(c fiber.Ctx) bool
 
 	ID     IDSpec
 	Fields []Field

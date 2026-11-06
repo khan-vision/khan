@@ -138,11 +138,11 @@ func TestPrivateSignFailureIs500(t *testing.T) {
 	e := newPrivEnv(t, nil)
 	e.u.privTTL = -1 // Sign: ttl эерэг биш → алдаа
 	data := []byte("%PDF-1.4\n%%EOF\n")
-	resp, _ := do(t, e.app, privUploadReq(t, "/api/upload/private", nil, "a.pdf", "application/pdf", data, "7", "org-1"))
+	resp, _ := do(t, e.app, privUploadReq(t, "/api/upload/private", nil, "a.pdf", "application/pdf", data, "7", "11111111-1111-1111-1111-111111111111"))
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Fatalf("status=%d", resp.StatusCode)
 	}
-	res, err := e.u.StoreFile(context.Background(), StoreRequest{Filename: "a.pdf", Visibility: VisibilityPrivate, OrgID: "org-1"}, bytes.NewReader(data), int64(len(data)))
+	res, err := e.u.StoreFile(context.Background(), StoreRequest{Filename: "a.pdf", Visibility: VisibilityPrivate, OrgID: "11111111-1111-1111-1111-111111111111"}, bytes.NewReader(data), int64(len(data)))
 	if err == nil || res.Path == "" || res.URL != "" {
 		t.Fatalf("res=%+v err=%v", res, err)
 	}

@@ -188,3 +188,34 @@ func TestWithOrgRequiresTx(t *testing.T) {
 		t.Fatal("хоосон context-д org олдов")
 	}
 }
+
+// SharedCond нь зөвхөн унших (SELECT)-д org-scope; UPDATE/DELETE нь системийн мөрийг өөрчилж болзошгүй тул
+// `org_id = ?` эсвэл SystemRow шаардана.
+func TestGuardSharedCondOnlyForReads(t *testing.T) {
+	db := guardDB(t, GuardStrict, nil)
+	var rows []guardInvoice
+	if err := db.Where(SharedCond(""), "org-A").Find(&rows).Error; err != nil {
+		t.Errorf("SELECT + SharedCond зөвшөөрөгдөх ёстой: %v", err)
+	}
+	blocked := map[string]*gorm.DB{
+		"update shared":      db.Model(&guardInvoice{}).Where(SharedCond(""), "org-A").Update("code", "y"),
+		"delete shared":      db.Where(SharedCond(""), "org-A").Delete(&guardInvoice{}),
+		"update shared + id": db.Model(&guardInvoice{}).Where("id = ?", "1").Where(SharedCond(""), "org-A").Update("code", "y"),
+	}
+	for name, res := range blocked {
+		if !errors.Is(res.Error, ErrUnscoped) {
+			t.Errorf("%s: ErrUnscoped хүлээсэн, %v", name, res.Error)
+		}
+	}
+	allowed := map[string]*gorm.DB{
+		"update own":    db.Model(&guardInvoice{}).Where(SharedCond(""), "org-A").Where("org_id = ?", "org-A").Update("code", "y"),
+		"update org_id": db.Model(&guardInvoice{}).Where("org_id = ? AND id = ?", "org-A", "1").Update("code", "y"),
+		"update system": SystemRow(db.Model(&guardInvoice{})).Where("org_id IS NULL AND id = ?", "1").Update("code", "y"),
+		"delete system": SystemRow(db.Where("org_id IS NULL")).Delete(&guardInvoice{}),
+	}
+	for name, res := range allowed {
+		if res.Error != nil {
+			t.Errorf("%s: %v", name, res.Error)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package crud
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/khan-vision/khan/tenant"
@@ -74,6 +75,9 @@ func (o owner) orgValue() any {
 func (e *engine) readWhere(q *gorm.DB, prefix, orgID string) *gorm.DB {
 	switch e.scope {
 	case ScopeShared:
+		if orgID == "" { // org-гүй системийн принсипал: зөвхөн системийн мөр
+			return tenant.SystemRow(q).Where(prefix + "org_id IS NULL")
+		}
 		return q.Where(tenant.SharedCond(prefix), orgID)
 	case ScopeGlobal:
 		return q
@@ -109,7 +113,7 @@ func (e *engine) rowOwner(orgID string, row map[string]any) (owner, error) {
 		o.system = true
 		return o, nil
 	}
-	if fmt.Sprint(normalizeScan(v)) != orgID {
+	if !strings.EqualFold(fmt.Sprint(normalizeScan(v)), orgID) { // uuid харьцуулалт том/жижиг үсэг үл ялгана
 		return o, errNotFound
 	}
 	return o, nil
@@ -136,7 +140,47 @@ func (e *engine) cacheOrg(orgID string) string {
 	if e.scope == ScopeGlobal {
 		return globalCacheOrg
 	}
+	if orgID == "" { // org-гүй системийн принсипал (Shared): системийн мөрийн namespace
+		return systemCacheOrg
+	}
 	return orgID
+}
+
+// resolveOrg — хүсэлтийн org. Анхдагч e.org (tenant.Require → 401). SystemPrincipal тохируулагдсан, scope нь
+// Global/Shared, JWT-д хүчинтэй org_id БАЙХГҮЙ, принсипал таарвал org="" (org-гүй) гэж амжилттай буцна.
+// Өөр бүх тохиолдолд (ScopeTenant, энгийн хэрэглэгч) e.org — өөрчлөлтгүй fail-closed.
+func (e *engine) resolveOrg(c fiber.Ctx) (string, bool) {
+	if e.sysPrincipal != nil && e.scope != ScopeTenant {
+		if _, err := tenant.OrgID(c); err != nil {
+			if _, authed := tenant.Claims(c); authed && e.sysPrincipal(c) {
+				return "", true
+			}
+		}
+	}
+	return e.org(c)
+}
+
+// needOrg — org-гүй (системийн принсипал) хүсэлтийг org шаардсан үйлдэлд (энгийн мөр үүсгэх) 401-ээр зогсооно.
+func needOrg(c fiber.Ctx, orgID string) bool {
+	if orgID != "" {
+		return true
+	}
+	_ = jsonErr(c, fiber.StatusUnauthorized, "Зөвшөөрөлгүй")
+	return false
+}
+
+// AnyPrincipal — нэвтэрсэн (JWT claims-тэй) хэн ч. Single-tenant төслийн Resource.SystemPrincipal.
+func AnyPrincipal(c fiber.Ctx) bool { _, ok := tenant.Claims(c); return ok }
+
+// SingleTenant — org_id-гүй (single-tenant) төслийн Resource загвар: Scope=ScopeGlobal, GlobalWrites=true,
+// SystemPrincipal=AnyPrincipal (JWT-д org шаардахгүй). Can заавал өөрөө тавина. Унших-л бол дараа нь
+// `r.GlobalWrites = false`. docs/CRUD.md «Single-tenant төслүүд».
+func (r *Resource[T]) SingleTenant() *Resource[T] {
+	r.Scope, r.GlobalWrites = ScopeGlobal, true
+	if r.SystemPrincipal == nil {
+		r.SystemPrincipal = AnyPrincipal
+	}
+	return r
 }
 
 // writable — бичих route-ууд mount хийгдэх эсэх (Global-д зөвхөн GlobalWrites үед).
@@ -146,6 +190,9 @@ func (e *engine) writable() bool { return e.scope != ScopeGlobal || e.globalWrit
 func (e *engine) checkScope() error {
 	if e.scope != ScopeShared && e.systemCan != nil {
 		return fmt.Errorf("SystemCan зөвхөн ScopeShared-д (одоо %s)", e.scope)
+	}
+	if e.scope == ScopeTenant && e.sysPrincipal != nil {
+		return fmt.Errorf("SystemPrincipal зөвхөн ScopeShared/ScopeGlobal-д (ScopeTenant org заавал)")
 	}
 	if e.scope != ScopeGlobal && e.globalWrites {
 		return fmt.Errorf("GlobalWrites зөвхөн ScopeGlobal-д (одоо %s)", e.scope)

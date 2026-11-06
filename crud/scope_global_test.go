@@ -200,9 +200,9 @@ func TestGlobalEventsAndAudit(t *testing.T) {
 	mustStatus(t, r, 201)
 	id := r.str("id")
 	mustStatus(t, do(t, app, "PUT", "/countries/"+id, f.orgS, roleSys, map[string]any{"version": 1, "name": "Монгол-2"}), 200)
-	// event: OrgID = actor org, payload-д org_id алга, scope=global
-	if f.count(`SELECT count(*) FROM khan.outbox_events WHERE topic = 'test.country.created' AND org_id = ? AND aggregate_id = ?
-		AND payload->>'scope' = 'global' AND NOT payload ? 'org_id'`, f.orgS, id) != 1 {
+	// event: OrgID = NULL (глобал мөр аль нэг org-ийнх биш), payload-д org_id алга, scope=global
+	if f.count(`SELECT count(*) FROM khan.outbox_events WHERE topic = 'test.country.created' AND org_id IS NULL AND aggregate_id = ?
+		AND payload->>'scope' = 'global' AND NOT payload ? 'org_id'`, id) != 1 {
 		t.Fatal("global event")
 	}
 	// audit: actor org-д бичигдэнэ

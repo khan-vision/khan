@@ -95,7 +95,7 @@ func (e *engine) canMap(c fiber.Ctx) map[string]bool {
 
 // gate — org (401) + Can (403) шалгана; ok=false бол хариу аль хэдийн бичигдсэн.
 func (e *engine) gate(c fiber.Ctx, a Action) (orgID string, gdb *gorm.DB, ok bool) {
-	orgID, ok = e.org(c)
+	orgID, ok = e.resolveOrg(c)
 	if !ok {
 		return "", nil, false
 	}

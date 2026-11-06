@@ -32,7 +32,7 @@ func mustRing(t *testing.T, active Key, prev ...Key) *Keyring {
 }
 
 func claims() jwt.MapClaims {
-	return jwt.MapClaims{"id": "u1", "login": "bat", "role": 3, "org_id": "org-1"}
+	return jwt.MapClaims{"id": "u1", "login": "bat", "role": 3, "org_id": "11111111-1111-1111-1111-111111111111"}
 }
 
 func TestNewKeyringValidation(t *testing.T) {
@@ -210,7 +210,7 @@ func do(t *testing.T, app *fiber.App, req *http.Request) (int, string, http.Head
 func TestMiddlewareHeaderCookieAndTenant(t *testing.T) {
 	kr := mustRing(t, Key{ID: "k1", Secret: []byte(secretA)})
 	app := newApp(kr)
-	raw, _ := Issue(kr, jwt.MapClaims{"id": 7.0, "login": "bat", "role": "3", "org_id": "org-1", "portal_only": true, "sid": "s1"}, time.Hour)
+	raw, _ := Issue(kr, jwt.MapClaims{"id": 7.0, "login": "bat", "role": "3", "org_id": "11111111-1111-1111-1111-111111111111", "portal_only": true, "sid": "s1"}, time.Hour)
 
 	req := httptest.NewRequest("GET", "/me", nil)
 	req.Header.Set("Authorization", "bearer "+raw)
@@ -225,8 +225,8 @@ func TestMiddlewareHeaderCookieAndTenant(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &out); err != nil {
 		t.Fatal(err)
 	}
-	want := Principal{ID: "7", Login: "bat", Role: 3, OrgID: "org-1", PortalOnly: true, SessionID: "s1"}
-	if out.Org != "org-1" || out.User != want {
+	want := Principal{ID: "7", Login: "bat", Role: 3, OrgID: "11111111-1111-1111-1111-111111111111", PortalOnly: true, SessionID: "s1"}
+	if out.Org != "11111111-1111-1111-1111-111111111111" || out.User != want {
 		t.Fatalf("%+v", out)
 	}
 

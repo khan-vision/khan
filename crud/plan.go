@@ -66,6 +66,7 @@ type engine struct {
 	scope        Scope
 	systemCan    func(c fiber.Ctx, a Action) bool
 	globalWrites bool
+	sysPrincipal func(c fiber.Ctx) bool
 
 	idCol  string
 	idKind IDKind
@@ -120,7 +121,7 @@ func (r *Resource[T]) Check() error {
 func (r *Resource[T]) build(runtime bool) (*engine, error) {
 	e := &engine{
 		name: r.Name, label: r.Label, endpoint: r.Endpoint, table: r.Table, alias: r.Alias,
-		scope: r.Scope, systemCan: r.SystemCan, globalWrites: r.GlobalWrites,
+		scope: r.Scope, systemCan: r.SystemCan, globalWrites: r.GlobalWrites, sysPrincipal: r.SystemPrincipal,
 		list: r.ListQuery, detail: r.DetailQuery, listSpec: r.List, export: r.Export, bulk: r.Bulk,
 		can: r.Can, validate: r.Validate, hooks: r.Hooks,
 		softDelete: r.SoftDelete, versionCol: r.Version, trackUser: r.TrackUser, rls: r.RLS,

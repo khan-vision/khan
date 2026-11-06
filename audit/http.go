@@ -136,6 +136,7 @@ func (h *handler) serve(c fiber.Ctx, record bool) error {
 func (h *handler) filter(c fiber.Ctx, orgID string, record bool) (Filter, string) {
 	f := Filter{
 		OrgID:    orgID,
+		NoOrg:    orgID == "",
 		Resource: h.cfg.Resource,
 		Page:     fiber.Query[int](c, "page", 1),
 		Limit:    fiber.Query[int](c, "limit", DefaultLimit),
