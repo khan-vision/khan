@@ -177,3 +177,10 @@ org_id-тай ч timestamps (AGENTS.md заавал) дутуу. Gen: child-д `
 - party.individual: нэг individual олон org-ийн party-д холбогдсон тохиолдол prod-д байгаа эсэх (prod_counts.sql #party).
 - archive.sales_purchase_order* , sale.sub_order_surcharge: устгах/архивлахыг зөвшөөрөх үү (DROP = таны зөвшөөрөл)?
 - lut_leave/lut_period: prod-д хэрэглэгдэж байна уу?
+
+## Prod баталгаажуулалт (2026-11-07, W0) - дээрх таамаглалын засвар
+- `public.sub_employee_*`.employee_id = **public.users.id** (organization.employee БИШ). Нотолгоо: Lambda form 1587-1590 `model=users`, SubForm `parent=employee_id` (`main/lambda/schemas/form/158{7..0}.json`, `main/lambda/models/form/Users1587.go:28,75`; FE `front_end/src/modules/core/forms/UserSkillForm.vue:5,124`). Prod: 26/26 мөр users-тэй таарна, employee-тэй 0/26; эзэмшигч хэрэглэгчид 100% олон org-ийн гишүүн. -> profile өгөгдөл, tenant загвар owner-ийн шийдвэр (`_pending_owner/0120`).
+- `party.party.org_id` зөвхөн `type='organization'` party-д (prod 596/596); individual (4008) party.org_id = NULL. `party.view_party` нь org_id-г `organization.organizations`-тай join хийдэг = "party нь тэр байгууллага өөрөө". Иймд individual-ийн tenant party-аас БИШ, relationship-ээр тодорно (4008: 3927 нэг org, 20 олон org, 61 холбоогүй).
+- `party.relationship`: from_party_id = нэвтэрсэн хэрэглэгчийн `party_id` (tenant-ын org party) (`main/modules/organization/controllers/PartyController.go:43-58`, `registry/registry.go:223-236`), to_party = харилцагч. Иймд org_id = from_party.org_id ЗӨВ, "cross-org 4403/4406" нь ХЭВИЙН (to_party = individual эсвэл өөр org). Prod: from_party 4406/4406 organization төрөлтэй (31 org).
+- Prod апп DB role `doadmin`: rolsuper=f, **rolbypassrls=t** -> RLS policy (FORCE-тэй ч) эффектгүй. RLS бүгд `_pending_owner/`.
+- Orphan (FK байхгүй, эцэг устсан): item.item_details 3/15, attendance.sub_shift 5/1286. Бусад child-д орphan 0.

@@ -56,3 +56,13 @@ prod_counts.sql -> orphan-ыг owner шийдэх -> `migrate up` (gate унав
 | party.relationship | жижиг (мөр=?) | богино | Дунд: from_party_id NULL, cross-org |
 | party.individual | дунд (мөр=?) | - | Дунд: shared org, NOT NULL pending |
 | 0501/0502 timestamps | metadata-only (PG11+) | богино ACCESS EXCLUSIVE x ~35 хүснэгт нэг tx | Бага; хуучин мөрийн created_at=migration цаг |
+
+## W0 prod-readiness хянан засвар (2026-11-07)
+Prod-ийн бодит тоо/semantics-аар (ORG_ID_GAPS.md "Prod баталгаажуулалт") засав:
+1. **sub_employee_***: backfill/trigger эцэг = `public.users` (users.org_id = home org), CHECK/NOT NULL/RLS ОРООГҮЙ -> `_pending_owner/0120`. Хуучин загвар (organization.employee) prod-д 26/26 orphan байсан.
+2. **item_details (3 orphan), sub_shift (5 orphan)**: NOT VALID CHECK нэмэхгүй (orphan мөрийн UPDATE-ийг эвддэг), column+trigger+backfill+index л; validate/NOT NULL -> `_pending_owner/0216`, `0303`. item_details PK(id) 0205-д хэвээр. Orphan УСТГАГДААГҮЙ.
+3. **relationship**: org = from_party.org_id (зөв); 0403-ийн "cross-org WARNING" хасав (хэвийн). 
+4. **party.individual W0-оос хасав** (баганагүй): individual party.org_id = NULL тул хуучин backfill юу ч бөглөхгүй байсан. -> `_pending_owner/0410` (relationship-ээр backfill).
+5. **RLS (0119/0215/0311/0408)** -> `_pending_owner/` (doadmin BYPASSRLS=t).
+6. Gate мессеж нэгтгэсэн (`docs/p4/W0_RUNBOOK.md` заана). verify_p4.sql: PENDING/INFO статус нэмсэн, #2 sub_employee users-тэй, #4 relationship-ээр.
+Локал батлалт (scratch `khan_w0_scratch_*` = khan_vision_test schema-only + prod-ийн хэлбэрийг дуурайсан синтетик өгөгдөл: users-parent sub_employee, 3+5 dangling, cross-org relationship): `khan migrate up` 33 файл ✓, дахин ажиллуулахад 0 хэрэглэгдлээ, verify_p4 OK/PENDING/INFO, derive trigger-ээр app-style INSERT (org_id-гүй) ✓, orphan-тай хүснэгтэд gate тогтоосон мессежээр унаж, шийдсэний дараа үргэлжилсэн.
