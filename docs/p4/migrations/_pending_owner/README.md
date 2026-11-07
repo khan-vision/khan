@@ -12,3 +12,13 @@
 | 0601 organizations org_id | owner шийдвэр. |
 
 HYBRID (lut_attendance_request, item.lut_inventory_tag), public.users (org_id нэмэхгүй), obsolete хүснэгтийн DROP-д зориудаар migration бичээгүй (ORG_ID_GAPS.md §6).
+
+## Шийдвэр (2026-11-07, owner: «хамгийн ухаалгаар шийд, ажиллаж байгаа систем хэвээр»)
+W0 prod-д 10:22-д хэрэглэгдсэн (33 файл). Энэ хавтасны файлуудыг **одоохондоо ажиллуулахгүй** — шалтгаан:
+1. **item_details 3 / sub_shift 5 orphan** — хэвээр (NULL org_id, NOT NULL-гүй). Эцэг нь устсан, апп уншдаггүй мөрүүд; устгах ашиггүй, эрсдэлтэй.
+2. **sub_employee_* (26)** — хэрэглэгчийн профайлын өгөгдөл (parent = public.users), tenant өгөгдөл БИШ. org_id = home org (best-effort, nullable) хэвээр; NOT NULL/RLS хийхгүй (`0120` хойшлогдоно).
+3. **party.individual** — tenant нь relationship-ээр тодорхойлогддог (3927 нэг org, 20 олон org, 61 холбоогүй); хуулбарлах/join хүснэгт = апп логик өөрчлөх ⇒ хийхгүй (`0410` хойшлогдоно).
+4. **RLS** — апп role `doadmin` BYPASSRLS ⇒ асаасан ч нөлөөгүй; role салгах = DB дэд бүтцийн өөрчлөлт (пул, migration, cron) ⇒ хийхгүй. Tenant хамгаалалт = апп түвшин (`khan/tenant`, JWT org, `crudtest.Isolation`).
+5. **`p4_*_org_id_derive` trigger** — хэвээр (апп org_id бичдэг болох хүртэл аюулгүй тор). 11/07 шалгалт: шинэ мөр org_id-тай, зөрчил 0.
+6. **HYBRID** (lut_attendance_request, lut_inventory_tag) — nullable хэвээр.
+Дахин авч үзэх нөхцөл: апп бүх INSERT-д org_id бичдэг болсон (P4 native resource-ууд бүрэн) эсвэл DB role-ийг салгах шийдвэр гарсан үед.
