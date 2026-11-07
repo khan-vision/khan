@@ -54,6 +54,7 @@
 - **W4**: sale/service/workflow/party/news. 1854 (sale_order) subform-ууд W0 G2; party 1574/1581 W0 G4; process_status_history = useTableType (TODO).
 - **W5**: Платформын контент: kvadmin/* native (role 4) - genерац ХЭРЭГГҮЙ, retire. public.* лавлах, aibot.chat_bot_package, web.*, map_server.*, classification.sector.
 - **W6**: public.users (1536, 1585-1591, 1822) + organizations (1495, 1647, 1762): auth/profile - khan/auth (P2) + KvForm; tenant-scope-гүй, owner шийдвэр шаардана.
+- **W5/W7 төлөв (2026-11-07): ДУУССАН (retire).** `main/legacy/retired` guard (main `4943d1ca`) нь 44 form/grid id-ийн `/lambda/krud|puzzle` хүсэлт бүрд 404 буцаана (DB хүснэгт хөндөөгүй). Үндэслэл: role 4 цэсний хуучин Lambda uuid-ууд FE `legacyMenuRedirects.ts`-ээр `/kv-dashboard/*` руу шилжсэн, kv-dashboard хуудсууд `/api/kv-admin/*`-ыг л дууддаг; Caddy log (10/31–11/03 + 11/07 09:42-оос) хандалт = зөвхөн 11/02-ийн нэг удаагийн schema sweep (id бүр ≤12). Үлдсэн FE цэвэрлэгээ: `nativeForms.ts`/`nativeGrids.ts` registry + `core|map|aibot/forms/*` (хуучин krud shell-ийн dead код).
 - **W7**: archive.sales_purchase_order(+items) 1557/1618/1620/1832, sale.sub_order_surcharge 1619, document.category 1603, category_sub 1604, category_sub_sub 1605/1615: устгах/obsolete.
 
 ## 3. Форм бүрийн төлөв
@@ -62,7 +63,7 @@
 
 | Форм | Хүснэгт | Долгион | state | todo | Grid | native? | org_id fix |
 |---|---|---|---|---|---|---|---|
-| 204 | `classification.sector` | W5 | blocked-by-org_id | - | 205 | Y | (b) global reference; өөрийн native модуль бий |
+| 204 | `classification.sector` | W5 | blocked-by-org_id | - | 205 | Y | (b) global reference; өөрийн native модуль бий **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 206 | `organization.sub_sector` | W1 | blocked-by-org_id | - | 208 | Y | (b) |
 | 638 | `planning.work_plan_tags` | W1 | cosmetic TODO | labelx1 | 639 | Y |  |
 | 678 | `attendance.shift` | W1 | logic TODO | formulax1, gridx1, labelx1, subformx1 (subform алгассан: 1) | 680 | Y |  |
@@ -95,12 +96,12 @@
 | 1540 | `loyalty.card_type` | W3 | cosmetic TODO | labelx1 | 1541 | - |  |
 | 1542 | `loyalty.loyalty_card` | W3 | logic TODO | custom-elementx1, form-featurex1, gridx2, labelx1 | 1544 | - |  |
 | 1545 | `loyalty.card_batch_print` | W3 | cosmetic TODO | labelx1 | 1546 | - |  |
-| 1557 | `archive.sales_purchase_order` | W7 | blocked-by-org_id | - | 1560 | Y | (c) obsolete: форм 1557/1618/1832, grid 1560-г устга; хүснэгтийг owner зөвшөөрлөөр архивла |
-| 1561 | `map_server.map_layers` | W5 | blocked-by-org_id | - | 1567 | Y | (b) native kvadmin/gis бий -> legacy retire |
-| 1562 | `map_server.map` | W5 | blocked-by-org_id | - | 1563 | Y | (b) native kvadmin/gis бий -> legacy retire |
-| 1564 | `map_server.map_layer_category` | W5 | blocked-by-org_id | - | 1565 | Y | (b) native kvadmin/gis бий -> legacy retire |
-| 1566 | `map_server.map_layer_legends` | W5 | blocked-by-org_id | - | - | Y | (b) native kvadmin/gis бий -> legacy retire |
-| 1568 | `map_server.map_filters` | W5 | blocked-by-org_id | - | - | Y | (b) native kvadmin/gis бий -> legacy retire |
+| 1557 | `archive.sales_purchase_order` | W7 | blocked-by-org_id | - | 1560 | Y | (c) obsolete: форм 1557/1618/1832, grid 1560-г устга; хүснэгтийг owner зөвшөөрлөөр архивла **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1561 | `map_server.map_layers` | W5 | blocked-by-org_id | - | 1567 | Y | (b) native kvadmin/gis бий -> legacy retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1562 | `map_server.map` | W5 | blocked-by-org_id | - | 1563 | Y | (b) native kvadmin/gis бий -> legacy retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1564 | `map_server.map_layer_category` | W5 | blocked-by-org_id | - | 1565 | Y | (b) native kvadmin/gis бий -> legacy retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1566 | `map_server.map_layer_legends` | W5 | blocked-by-org_id | - | - | Y | (b) native kvadmin/gis бий -> legacy retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1568 | `map_server.map_filters` | W5 | blocked-by-org_id | - | - | Y | (b) native kvadmin/gis бий -> legacy retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 1574 | `party.individual` | W4 | blocked-by-org_id | - | 1575 | Y | (a) + эхлээд олон org-д давхцахыг шалга |
 | 1581 | `party.relationship` | W4 | blocked-by-org_id | - | 1580, 1808 | Y | (a) + PRIMARY KEY(id) |
 | 1585 | `public.users` | W6 | blocked-by-org_id | - | 1537 | Y | (b) org_id НЭМЭХГҮЙ. Built-in долгион: auth/profile нь khan/auth-д; org-ийн хэрэглэгчийн жагсаалт = employee-ээр scope-т |
@@ -110,13 +111,13 @@
 | 1589 | `public.users` | W6 | blocked-by-org_id | - | 1537 | - | (b) org_id НЭМЭХГҮЙ. Built-in долгион: auth/profile нь khan/auth-д; org-ийн хэрэглэгчийн жагсаалт = employee-ээр scope-т |
 | 1590 | `public.users` | W6 | blocked-by-org_id | - | 1537 | - | (b) org_id НЭМЭХГҮЙ. Built-in долгион: auth/profile нь khan/auth-д; org-ийн хэрэглэгчийн жагсаалт = employee-ээр scope-т |
 | 1591 | `public.users` | W6 | blocked-by-org_id | - | 1537 | - | (b) org_id НЭМЭХГҮЙ. Built-in долгион: auth/profile нь khan/auth-д; org-ийн хэрэглэгчийн жагсаалт = employee-ээр scope-т |
-| 1603 | `document.category` | W7 | failed | - | 1606 | - | (c) legacy form 1603 (grid 1606) -> document модулийн одоогийн category API-аар солих; org_id асуудал БИШ |
-| 1604 | `category_sub` | W7 | failed | - | 1610 | - | (c) obsolete |
-| 1605 | `category_sub_sub` | W7 | failed | - | 1611 | - | (c) obsolete |
-| 1615 | `category_sub_sub` | W7 | failed | - | 1611 | - | (c) obsolete |
-| 1618 | `archive.sales_purchase_order` | W7 | blocked-by-org_id | - | 1560 | - | (c) obsolete: форм 1557/1618/1832, grid 1560-г устга; хүснэгтийг owner зөвшөөрлөөр архивла |
-| 1619 | `sale.sub_order_surcharge` | W7 | blocked-by-org_id | - | - | - | (c) |
-| 1620 | `archive.sales_purchase_order_items` | W7 | blocked-by-org_id | - | - | - | (c) |
+| 1603 | `document.category` | W7 | failed | - | 1606 | - | (c) legacy form 1603 (grid 1606) -> document модулийн одоогийн category API-аар солих; org_id асуудал БИШ **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1604 | `category_sub` | W7 | failed | - | 1610 | - | (c) obsolete **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1605 | `category_sub_sub` | W7 | failed | - | 1611 | - | (c) obsolete **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1615 | `category_sub_sub` | W7 | failed | - | 1611 | - | (c) obsolete **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1618 | `archive.sales_purchase_order` | W7 | blocked-by-org_id | - | 1560 | - | (c) obsolete: форм 1557/1618/1832, grid 1560-г устга; хүснэгтийг owner зөвшөөрлөөр архивла **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1619 | `sale.sub_order_surcharge` | W7 | blocked-by-org_id | - | - | - | (c) **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1620 | `archive.sales_purchase_order_items` | W7 | blocked-by-org_id | - | - | - | (c) **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 1621 | `workflow_and_process.workflow_system_type` | W4 | blocked-by-org_id | - | 1624 | - | (b) global lookup; lookup.Spec{Tenant: lookup.TenantOff()} |
 | 1622 | `workflow_and_process.workflow_category` | W4 | blocked-by-org_id | - | 1625 | - | (b) |
 | 1623 | `workflow_and_process.workflow` | W4 | logic TODO | custom-elementx1, gridx2, labelx1, subformx1 (subform алгассан: 1) | 1626 | - |  |
@@ -139,20 +140,20 @@
 | 1688 | `treasurer.lut_equipment_type` | W2 | cosmetic TODO | labelx1 | 1695 | Y |  |
 | 1689 | `treasurer.equipment` | W2 | logic TODO | custom-elementx2, gridx2, labelx1 | 1691 | Y |  |
 | 1690 | `treasurer.rooms` | W2 | logic TODO | gridx2, labelx1, subformx1 (subform алгассан: 1) | 1696 | Y |  |
-| 1697 | `web.home_erp_cards` | W5 | blocked-by-org_id | - | 1698 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
-| 1699 | `web.home_card_info` | W5 | blocked-by-org_id | - | 1700 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
-| 1704 | `web.faq_new` | W5 | blocked-by-org_id | - | 1705 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
-| 1711 | `web.home_erp_cards_package` | W5 | blocked-by-org_id | - | 1712 | Y |  |
-| 1717 | `web.home_card_info_right` | W5 | blocked-by-org_id | - | - | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
-| 1719 | `public.about_us` | W5 | blocked-by-org_id | - | 1720 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
+| 1697 | `web.home_erp_cards` | W5 | blocked-by-org_id | - | 1698 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1699 | `web.home_card_info` | W5 | blocked-by-org_id | - | 1700 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1704 | `web.faq_new` | W5 | blocked-by-org_id | - | 1705 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1711 | `web.home_erp_cards_package` | W5 | blocked-by-org_id | - | 1712 | Y | **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1717 | `web.home_card_info_right` | W5 | blocked-by-org_id | - | - | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1719 | `public.about_us` | W5 | blocked-by-org_id | - | 1720 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 1722 | `item.brands` | W3 | cosmetic TODO | labelx1 | 1723 | - |  |
 | 1732 | `party.party_feedback` | W4 | logic TODO | gridx2, labelx1 | 1736 | Y |  |
 | 1733 | `party.party_gratitude` | W4 | logic TODO | gridx2, labelx1 | 1737 | Y |  |
 | 1740 | `service.assigned_services` | W4 | logic TODO | custom-elementx1, gridx2, labelx2, triggerx1 | 1846 | - |  |
-| 1741 | `public.feed_back_khan_vision` | W5 | blocked-by-org_id | - | 1742 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
+| 1741 | `public.feed_back_khan_vision` | W5 | blocked-by-org_id | - | 1742 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 1746 | `organization.employee` | W1 | logic TODO | custom-elementx2, gridx2, labelx2, show-hidex1, subformx2 (subform алгассан: 2) | 1515, 1743, 1748 | - |  |
-| 1749 | `public.guide_list` | W5 | blocked-by-org_id | - | 1750 | Y |  |
-| 1754 | `public.guide_images` | W5 | blocked-by-org_id | - | - | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
+| 1749 | `public.guide_list` | W5 | blocked-by-org_id | - | 1750 | Y | **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1754 | `public.guide_images` | W5 | blocked-by-org_id | - | - | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 1762 | `organization.organizations` | W6 | blocked-by-org_id | - | 1497, 1676 | - | (a-variant) generated org_id=id; sysadmin жагсаалт = tenant-гүй kv-admin API (owner баталгаажуулна) |
 | 1774 | `treasurer.equipment_count` | W2 | logic TODO | fill-by-userx1, gridx2, labelx1 | 1776 | Y |  |
 | 1778 | `inventory.inventory_discrepancy_responsibility` | W3 | logic TODO | labelx1, relationx1, subformx1 (subform алгассан: 1) | 1779 | - |  |
@@ -165,7 +166,7 @@
 | 1822 | `public.users` | W6 | blocked-by-org_id | - | 1537 | - | (b) org_id НЭМЭХГҮЙ. Built-in долгион: auth/profile нь khan/auth-д; org-ийн хэрэглэгчийн жагсаалт = employee-ээр scope-т |
 | 1823 | `payment.golomt_integration` | W2 | cosmetic TODO | labelx1 | 1824 | Y |  |
 | 1829 | `item.categories` | W3 | logic TODO | custom-elementx1, labelx2, relationx1 | 1852 | - |  |
-| 1832 | `archive.sales_purchase_order` | W7 | blocked-by-org_id | - | 1560 | - | (c) obsolete: форм 1557/1618/1832, grid 1560-г устга; хүснэгтийг owner зөвшөөрлөөр архивла |
+| 1832 | `archive.sales_purchase_order` | W7 | blocked-by-org_id | - | 1560 | - | (c) obsolete: форм 1557/1618/1832, grid 1560-г устга; хүснэгтийг owner зөвшөөрлөөр архивла **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
 | 1834 | `news.news` | W4 | logic TODO | column-missingx1, gridx1, labelx1 | 1781, 1848 | - |  |
 | 1838 | `finance.bonus_salary_configuration` | W2 | logic TODO | gridx2, labelx1 | 1840 | Y |  |
 | 1844 | `finance.bonus_salary_employee` | W2 | logic TODO | gridx2, labelx2 | 1843 | Y |  |
@@ -173,5 +174,5 @@
 | 1851 | `item.categories` | W3 | cosmetic TODO | labelx2 | 1852 | - |  |
 | 1854 | `sale.sale_order` | W4 | logic TODO | custom-elementx8, fill-by-userx1, gridx2, labelx2, show-hidex1, subformx4, triggerx2 (subform алгассан: 4) | 1857 | - |  |
 | 1855 | `purchase.purchase_order` | W3 | logic TODO | gridx2, labelx2 | 1859 | - |  |
-| 1861 | `aibot.chat_bot_package` | W5 | blocked-by-org_id | - | 1862 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire |
-| 1863 | `aibot.chat_bots` | W5 | logic TODO | column-typex1, gridx2, labelx2 | 1866 | Y |  |
+| 1861 | `aibot.chat_bot_package` | W5 | blocked-by-org_id | - | 1862 | Y | (b) Аль хэдийн native: main/modules/kvadmin/* (role 4). Legacy form/grid-ийг ДАХИН генерацлахгүй, зүгээр retire **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
+| 1863 | `aibot.chat_bots` | W5 | logic TODO | column-typex1, gridx2, labelx2 | 1866 | Y | **RETIRED 2026-11-07** (main `4943d1ca`, sidecar 404 guard `legacy/retired`) |
